@@ -15,6 +15,8 @@ from sklearn.metrics import r2_score
 from sklearn import preprocessing
 from sklearn.preprocessing import StandardScaler
 from sklearn.externals.joblib import dump, load
+from sklearn.decomposition import PCA
+from sklearn.utils import shuffle
 from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.models import load_model
@@ -24,7 +26,6 @@ from tensorflow.keras.regularizers import l2
 from tensorflow.python.keras.utils.data_utils import Sequence
 from tensorflow.keras.wrappers.scikit_learn import KerasRegressor
 from tensorflow.keras.utils import CustomObjectScope
-import pandas as pd
 import numpy as np
 import random
 import os
@@ -148,6 +149,22 @@ def PreprocessData():
 
     X_train.tofile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_all_preprocessed")
     Y_train.tofile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms_all_preprocessed")
+
+
+def PreprocessSegmentationData():
+    X_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\frames", dtype=np.dtype("(518400,)u1"))
+    Y_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\boxes", dtype=np.dtype("(9,)f8"))
+
+    scalerX = StandardScaler(copy=False)
+    scalerY = StandardScaler(copy=False)
+    X_train = scalerX.fit_transform(X_train)
+    Y_train = scalerY.fit_transform(Y_train)
+
+    dump(scalerX, 'C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\std_scalerx_segmentation.bin', compress=True)
+    dump(scalerY, 'C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\std_scalery_segmentation.bin', compress=True)
+
+    X_train.tofile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\frames_processed")
+    Y_train.tofile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\boxes_processed")
 
 def TrainWithKeras():
     X_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_all_preprocessed", dtype=np.dtype("(188000,)f8"))
@@ -315,7 +332,8 @@ def GenerateSegmentationData():
                 success,image = vidcap.read()
                 while success:
                     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-                    array = np.asarray(gray)
+                    resize = cv2.resize(gray, (int(gray.shape[1]/2), int(gray.shape[0]/2)), interpolation= cv2.INTER_LANCZOS4)
+                    array = np.asarray(resize)
                     array.tofile(frames)  
                     success,image = vidcap.read()
                 file = file[:-4] + ".gt.xml"
@@ -327,8 +345,8 @@ def GenerateSegmentationData():
                         vector[0] = 1
                     count = 1
                     for point in frame.iter("point"):
-                        vector[count] = float(point.attrib["x"])
-                        vector[count+1] = float(point.attrib["y"])
+                        vector[count] = float(point.attrib["x"]) / 2
+                        vector[count+1] = float(point.attrib["y"]) / 2
                         count = count + 2
                     vector.tofile(boxes)
 
@@ -357,15 +375,57 @@ def GenerateSegmentationData():
 #    img = Image.open('C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\BindingBox3.jpg')    
 #    img.show()
 
+def ShuffleSegementationData():
+    X_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\frames_processed", dtype=np.dtype("(518400,)f8"))
+    y_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\boxes_processed", dtype=np.dtype("(9,)f8"))
+
+    X_train, y_train = shuffle(X_train, y_train)
+
+    X_train.tofile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\frames_processed_shuffled")
+    y_train.tofile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\boxes_processed_shuffled")
+
 def TrainSegmentation():
+
+    hidden_layers = [layers.Dense(units=100, 
+                                activation='relu', 
+                                input_shape=[518400], 
+                                #kernel_regularizer = keras.regularizers.l2(0.001),
+                                #bias_regularizer = keras.regularizers.l2(0.001),
+                                #activity_regularizer = keras.regularizers.l1(0.001),
+                                kernel_initializer=keras.initializers.glorot_uniform(), 
+                                bias_initializer=keras.initializers.glorot_uniform())]
+    for i in range(10):
+        hidden_layers.append(layers.Dense(units=100, 
+                                    activation='relu', 
+                                    #kernel_regularizer = keras.regularizers.l2(0.001),
+                                    #bias_regularizer = keras.regularizers.l2(0.001),
+                                    #activity_regularizer = keras.regularizers.l1(0.001),
+                                    kernel_initializer=keras.initializers.glorot_uniform(), 
+                                    bias_initializer=keras.initializers.glorot_uniform()))
+    hidden_layers.append(layers.Dense(units=9, use_bias=False))
+
+    model = keras.Sequential(hidden_layers)
+    model.compile(loss='mse',
+                optimizer=keras.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=False),
+                metrics=['accuracy', R_squared])
+
+    X_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\frames_processed_shuffled", dtype=np.dtype("(518400,)f8"))
+    y_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\boxes_processed_shuffled", dtype=np.dtype("(9,)f8"))
+
+    reduce_lr = keras.callbacks.ReduceLROnPlateau(verbose=1, patience=5)
+    early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', min_delta=0.00005, patience=20, verbose=1, mode='auto', baseline=None, restore_best_weights=True)
+    model.fit(X_train, y_train, epochs=400, batch_size=100, validation_split=0.1, verbose=1, shuffle=True, callbacks=[reduce_lr, early_stopping])
+    model.save("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\kerasmodel")
+
+def TrainSegmentationWithGenerator():
     model = keras.Sequential()
-    model.add(Dense(100, activation='relu', input_shape=[2073600]))
-    for i in range(40):
-        model.add(Dense(100, activation='relu'))
+    model.add(Dense(100, activation='relu', input_shape=[2073600], kernel_initializer=keras.initializers.glorot_uniform(),  bias_initializer=keras.initializers.glorot_uniform()))
+    for i in range(32):
+        model.add(Dense(100, activation='relu', kernel_initializer=keras.initializers.glorot_uniform(),  bias_initializer=keras.initializers.glorot_uniform()))
     model.add(Dense(9))
 
     model.compile(loss='mse',
-        optimizer=keras.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=False),
+        optimizer=keras.optimizers.SGD(learning_rate=0.1, momentum=0.9, nesterov=True),
         metrics=['accuracy', R_squared])
 
     reduce_lr = keras.callbacks.ReduceLROnPlateau(verbose=1, patience=5)
@@ -383,42 +443,45 @@ def TrainSegmentation():
 
     training_generator = DataGenerator("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\frames", 
                                        "C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\boxes", 
-                                       0, 20000, 2073600, 9, scalerX, scalerY, preprocessing)
+                                       0, 20000, 2073600, 9, scalerX, scalerY, preprocessing, 50)
     validation_generator = DataGenerator("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\frames", 
                                        "C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\boxes", 
-                                       20000, 24000, 2073600, 9, scalerX, scalerY, preprocessing)
+                                       20000, 24000, 2073600, 9, scalerX, scalerY, preprocessing, 50)
 
-    model.fit_generator(generator=training_generator, validation_data=validation_generator, use_multiprocessing=True, workers=0, verbose=1, callbacks=[early_stopping, reduce_lr], shuffle=True)
+    model.fit_generator(generator=training_generator, validation_data=validation_generator, epochs=20, use_multiprocessing=True, workers=0, verbose=1, callbacks=[reduce_lr, early_stopping], shuffle=True)
 
-    dump(scalerx, 'C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\std_scalerx_segmentation.bin', compress=True)
-    dump(scalery, 'C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\std_scalery_segmentation.bin', compress=True)
+    dump(scalerX, 'C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\std_scalerx_segmentation.bin', compress=True)
+    dump(scalerY, 'C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\std_scalery_segmentation.bin', compress=True)
 
     model.save("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\kerasmodel")
 
 def ValidateSegmentation():
-    Y = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\boxes", dtype=np.dtype("(9,)f8"))
-    scaler = MinMaxScaler()
-    model = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\kerasmodel")
-    for r, d, f in os.walk("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\testDataset\\background01"):
+    model = []
+    with CustomObjectScope({'R_squared': R_squared}):
+        model = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\kerasmodel")
+
+    scalerX = load('C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\std_scalerx_segmentation.bin')
+    scalerY = load('C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\std_scalery_segmentation.bin')
+
+    for r, d, f in os.walk("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\sampleDataset\\input_sample\\background00"):
         for file in f:
             if file.endswith(".avi"):
-                vidcap = cv2.VideoCapture(os.path.join(r, file))
+                p = os.path.join(r, file)
+                print(p)
+                vidcap = cv2.VideoCapture(p)
                 success,image = vidcap.read()
-                index = 0
                 while success:
                     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-                    array = np.asarray(gray).reshape(2073600).reshape(1, -1)
-                    array = scaler.fit_transform(array)
-                    test_predictions = model.predict(array)
-                    scaler.fit(Y[:, 1:])
-                    test_predictions[:, 1:] = scaler.inverse_transform(test_predictions[:, 1:])
-                    prediction = test_predictions[0]
-                    index = index + 1
+                    resize = cv2.resize(gray, (int(gray.shape[1]/2), int(gray.shape[0]/2)), interpolation= cv2.INTER_LANCZOS4)
+                    array = np.asarray(resize).reshape(518400).reshape(1, -1).astype(np.float64)
+                    test_predictions = model.predict(scalerX.transform(array))
+                    prediction = scalerY.inverse_transform(test_predictions[0])
+                    prediction[1:] = prediction[1:] * 2
+                    print(prediction)
                     pts = np.array([[prediction[1], prediction[2]],[prediction[3], prediction[4]],[prediction[5], prediction[6]],[prediction[7], prediction[8]]], np.int32)
-                    if prediction[0] > 0.5:
-                        cv2.polylines(image, [pts], True, (0, 0, 255))
-                        cv2.imshow('Window', image)
-                        cv2.waitKey(0)
+                    cv2.polylines(image, [pts], True, (0, 0, 255))
+                    cv2.imshow('Window', image)
+                    cv2.waitKey(0)
                     success,image = vidcap.read()
 
     cv2.destroyAllWindows()
@@ -543,4 +606,4 @@ def Replicate():
         plt.show()
 
 if __name__ == '__main__':
-    TrainSegmentation()
+    ValidateSegmentation()
