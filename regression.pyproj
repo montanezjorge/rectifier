@@ -11,6 +11,7 @@
     <WorkingDirectory>.</WorkingDirectory>
     <OutputPath>.</OutputPath>
     <InterpreterId>Global|PythonCore|3.7</InterpreterId>
+    <ProjectGuid>{d2efe3a4-8223-4c61-9e9f-96e98de879a9}</ProjectGuid>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>
@@ -21,7 +22,15 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="config.py" />
+    <Compile Include="image_transformer.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="model.py" />
+    <Compile Include="parallel_model.py" />
     <Compile Include="regression.py" />
+    <Compile Include="utils.py" />
+    <Compile Include="visualize.py" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="environment.yml" />

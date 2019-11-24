@@ -5,7 +5,7 @@ seednumber = 8
 from numpy.random import seed
 seed(seednumber)
 import tensorflow as tf
-tf.random.set_seed(seednumber)
+#tf.random.set_seed(seednumber)
 from affine import Affine
 from matplotlib import pyplot as plt
 from PIL import Image
@@ -36,165 +36,99 @@ import warnings
 import pytesseract
 import cv2
 import xml.etree.ElementTree as ET
+import image_transformer
+from image_transformer import *
 
 def GenerateData():
     systemRandom = random.SystemRandom()
 
     iter = 0
-    dir_num = 4
 
     for dir in os.listdir("C:\\Users\\jxmr\\Desktop\\ProjectIII\\rvl-cdip\\images"):
-        transforms=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms_all", "ab")
-        images=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_all", "ab")
-        names=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\imageNames_all", "a")
+        images=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_preprocessed", "ab")
+        transforms=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms", "ab")            
 
-        if iter == 10:
+        if iter == 5:
             break
 
         iter = iter + 1
-            
 
         for r, d, f in os.walk(os.path.join("C:\\Users\\jxmr\\Desktop\\ProjectIII\\rvl-cdip\\images", dir)):
             for file in f:
 
-                try:
-                    fileName = os.path.join(r, file)
-                    print(fileName)
-                    print(fileName, file=names)
-                    img = Image.open(fileName)
-                    img = img.resize((376, 500), Image.LANCZOS)
-                    x = systemRandom.uniform(0.0, 30.0)
-                    y = systemRandom.uniform(-40.0, 40.0)
-                    T_shear = np.array(Affine.shear(x, y)).reshape(3, 3)
-                    T_shear_inv = np.linalg.inv(T_shear)
-                    img_shear_transformation = np.asarray(img.transform((376, 500), Image.AFFINE, data=T_shear_inv.flatten()[:6], resample=Image.BICUBIC))
-
-                    angle = systemRandom.uniform(-40.0, 60.0)
-                    T_rotation = np.array(Affine.rotation(angle)).reshape(3, 3)
-                    T_rotation_inv = np.linalg.inv(T_rotation)
-                    img_rotation_transformation = np.asarray(img.transform((376, 500), Image.AFFINE, data=T_rotation_inv.flatten()[:6], resample=Image.BICUBIC))
-
-                    T_shear.tofile(transforms)
-                    img_shear_transformation.tofile(images)
-
-                    T_rotation.tofile(transforms)
-                    img_rotation_transformation.tofile(images)
-
-                except Exception as exception:
-                    print(exception)
+                fileName = os.path.join(r, file)
+                print(fileName)
+                theta = systemRandom.uniform(-30.0, 30.0)
+                phi = systemRandom.uniform(-30.0, 30.0)
+                gamma = systemRandom.uniform(-30.0, 30.0)
+                img = ImageTransformer(fileName, shape = (754, 1000))
+                im, transform = img.rotate_along_axis(theta, phi, gamma)
+                im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+                cv2.threshold(im ,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+                im = im / 255
+                transform = np.linalg.inv(transform)
+                im.tofile(images)
+                transform.tofile(transforms)
 
         transforms.close()
-        images.close()
-        names.close()
-
-def ValidateData():
-    transforms = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms_imagesa.txt", dtype=np.dtype("(3,3)f8"))
-    images = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_imagesa.txt", dtype=np.dtype("(250, 189)u1"))
-
-    for i in range(transforms.shape[0]):
-        img = Image.fromarray(images[i])
-        plt.imshow(np.asarray(img), cmap='gray')
-        plt.show() 
-        img_transformed = np.asarray(img.transform((img.size[0], img.size[1]), Image.AFFINE, data=transforms[i].flatten()[:6], resample=Image.BICUBIC))
-    
-        plt.imshow(np.asarray(img_transformed), cmap='gray')
-        plt.show()  
-
-def Test():
-    systemRandom = random.SystemRandom()
-    fileName = "C:\\Users\\jxmr\\Desktop\\ProjectIII\\rvl-cdip\\images\\imagesa\\a\\a\\a\\aaa13d00\\514409402_514409407.tif"
-    img = Image.open(fileName)    
-    plt.imshow(np.asarray(img), cmap='gray')
-    plt.show()  
-
-    x = systemRandom.uniform(0.0, 30.0)
-    y = systemRandom.uniform(-40.0, 40.0)
-    T_shear = np.array(Affine.shear(x, y)).reshape(3, 3)
-    T_shear_inv = np.linalg.inv(T_shear)
-    img_transformed = np.asarray(img.transform((img.size[0], img.size[1]), Image.AFFINE, data=T_shear_inv.flatten()[:6], resample=Image.BICUBIC))
-    plt.imshow(np.asarray(img_transformed), cmap='gray')
-    plt.show()  
-
-    img = Image.fromarray(img_transformed)
-    img_transformed = np.asarray(img.transform((img.size[0], img.size[1]), Image.AFFINE, data=T_shear.flatten()[:6], resample=Image.BICUBIC))
-    plt.imshow(np.asarray(img_transformed), cmap='gray')
-    plt.show()  
-
-def Train():
-    X = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_imagesc.txt", dtype=np.dtype("(188000,)u1"))
-    y = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms_imagesc.txt", dtype=np.dtype("(9,)f8"))
-    
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.01)
-
-    nn = MLPRegressor(hidden_layer_sizes=(100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100), verbose=True, learning_rate='adaptive', early_stopping=True)
-
-    with warnings.catch_warnings():
-        # ignore all caught warnings
-        warnings.filterwarnings("ignore")
-
-        nn.fit(X_train, y_train)
-
-    pickle.dump(nn, open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\nnReplicate.p", "wb"), protocol=4)
+        images.close() 
 
 def PreprocessData():
-    X_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_all", dtype=np.dtype("(188000,)u1"))[:50000]
-    Y_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms_all", dtype=np.dtype("(9,)f8"))[:50000]
 
-    scalerx = StandardScaler(copy=False)
+    Y_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms", dtype=np.dtype("(9,)f8"))
     scalery = StandardScaler(copy=False)
-    X_train = scalerx.fit_transform(X_train)
     Y_train = scalery.fit_transform(Y_train)
-
-    dump(scalerx, 'C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\std_scalerx.bin', compress=True)
     dump(scalery, 'C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\std_scalery.bin', compress=True)
+    Y_train.tofile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms_preprocessed")  
 
-    X_train.tofile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_all_preprocessed")
-    Y_train.tofile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms_all_preprocessed")
+def ValidateTrainingData():
+    Y_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms_preprocessed", dtype=np.dtype("(9,)f8"))
+    print(Y_train.shape)
+
+    ID = 0
+
+    while True:
+        im = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_preprocessed", dtype=np.dtype("(754000,)f8"), count=1, offset=754000*ID*8)
+        im = (im.reshape(754, 1000) * 255).astype(np.uint8)
+        plt.imshow(im)
+        plt.show()
+        ID = ID + 1
 
 
-def PreprocessSegmentationData():
-    X_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\frames", dtype=np.dtype("(518400,)u1"))
-    Y_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\boxes", dtype=np.dtype("(9,)f8"))
 
-    scalerX = StandardScaler(copy=False)
-    scalerY = StandardScaler(copy=False)
-    X_train = scalerX.fit_transform(X_train)
-    Y_train = scalerY.fit_transform(Y_train)
-
-    dump(scalerX, 'C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\std_scalerx_segmentation.bin', compress=True)
-    dump(scalerY, 'C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\std_scalery_segmentation.bin', compress=True)
-
-    X_train.tofile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\frames_processed")
-    Y_train.tofile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\boxes_processed")
-
-def TrainWithKeras():
-    X_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_all_preprocessed", dtype=np.dtype("(188000,)f8"))
-    y_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms_all_preprocessed", dtype=np.dtype("(9,)f8"))
-
+def Train():
     hidden_layers = [layers.Dense(units=100, 
                                   activation='relu', 
-                                  input_shape=[X_train.shape[1]], 
-                                  #kernel_regularizer = keras.regularizers.l2(0.0001),
+                                  input_shape=[754000], 
                                   kernel_initializer=keras.initializers.glorot_uniform(), 
                                   bias_initializer=keras.initializers.glorot_uniform())]
     for i in range(16):
         hidden_layers.append(layers.Dense(units=100, 
-                                          activation='relu', 
-                                          #kernel_regularizer = keras.regularizers.l2(0.0001),
+                                          activation='relu',
                                           kernel_initializer=keras.initializers.glorot_uniform(), 
                                           bias_initializer=keras.initializers.glorot_uniform()))
     hidden_layers.append(layers.Dense(units=9, use_bias=False))
 
     model = keras.Sequential(hidden_layers)
 
-    reduce_lr = keras.callbacks.ReduceLROnPlateau(verbose=1, patience=5)
-    early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', min_delta=0.00005, patience=10, verbose=1, mode='auto', baseline=None, restore_best_weights=True)
+    reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_R_squared', verbose=1, patience=5, mode='max')
+    early_stopping = keras.callbacks.EarlyStopping(monitor='val_R_squared', min_delta=0.00005, patience=12, verbose=1, mode='max', baseline=None, restore_best_weights=True)
     model.compile(loss='mse',
                 optimizer=keras.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=False),
                 metrics=['accuracy', R_squared])
 
-    model.fit(X_train, y_train, epochs=800, batch_size=1000, validation_split=0.1, verbose=1, shuffle=True, callbacks=[reduce_lr, early_stopping])
-    model.save("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasmodel")
+    def emptyPreprocessing(X, Y, scalerX, scalerY):
+        return X, Y
+
+    training_generator = DataGenerator("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_preprocessed", 
+                                       "C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms_preprocessed", 
+                                       0, 59999, 754000, 9, None, None, emptyPreprocessing, 25)
+    validation_generator = DataGenerator("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_preprocessed", 
+                                       "C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms_preprocessed",
+                                       60000, 65000, 754000, 9, None, None, emptyPreprocessing, 25)
+
+    model.fit_generator(generator=training_generator, validation_data=validation_generator, epochs=50, use_multiprocessing=True, workers=0, verbose=1, callbacks=[reduce_lr, early_stopping], shuffle=True)
+    model.save("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasmodel.h5")
 
 
 def R_squared(y, y_pred):
@@ -261,59 +195,6 @@ def ValidateTrainingWithKeras():
         plt.imshow(np.asarray(img_result2), cmap='gray')
         plt.show()
 
-def ValidateTraining():
-    #pytesseract.pytesseract.tesseract_cmd = r'C:\\Users\\jxmr\\Desktop\\ProjectIII\\wrapper\\tesseract.bat'
-
-    nn = pickle.load( open( "C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\nn3.p", "rb" ) )
-
-    X_test = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_imagese.txt", dtype=np.dtype("(188000,)u1"))
-    y_test = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms_imagese.txt", dtype=np.dtype("(3,3)f8"))
-
-    list = []
-
-    for r, d, f in os.walk("C:\\Users\\jxmr\\Desktop\\ProjectIII\\rvl-cdip\\images\\imagese"):
-        for file in f:
-            list.append(os.path.join(r, file))
-
-    for i in range(0, int(X_test.shape[0] / 2), 2):
-
-        y_predicted1 = nn.predict(X_test[i].reshape(1, -1))[0]
-        y_predicted2 = nn.predict(X_test[i+1].reshape(1, -1))[0]
-
-        fileName = list[i]
-        print(fileName)
-        img = Image.open(fileName)
-        #file1 = open( "C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\output1.txt", "w" ) 
-        #print(pytesseract.image_to_string(img), file=file1)
-        #file1.flush()
-        #file1.close()
-        plt.imshow(np.asarray(img), cmap='gray')
-        plt.show()  
-        T_inv1 = np.linalg.inv(y_test[i])
-        img_transformation1 = img.transform((img.size[0], img.size[1]), Image.AFFINE, data=T_inv1.flatten()[:6], resample=Image.BICUBIC)
-        plt.imshow(np.asarray(img_transformation1), cmap='gray')
-        plt.show()  
-        img_result1 = img_transformation1.transform((img_transformation1.size[0], img_transformation1.size[1]), Image.AFFINE, data=y_predicted1.flatten()[:6], resample=Image.BICUBIC)
-        plt.imshow(np.asarray(img_result1), cmap='gray')
-        plt.show()  
-
-        T_inv2 = np.linalg.inv(y_test[i+1])
-        img_transformation2 = img.transform((img.size[0], img.size[1]), Image.AFFINE, data=T_inv2.flatten()[:6], resample=Image.BICUBIC)
-        #file2 = open( "C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\output2.txt", "w" ) 
-        #print(pytesseract.image_to_string(img_transformation2), file=file2)
-        #file2.flush()
-        #file2.close()
-        plt.imshow(np.asarray(img_transformation2), cmap='gray')
-        plt.show()  
-        img_result2 = img_transformation2.transform((img_transformation2.size[0], img_transformation2.size[1]), Image.AFFINE, data=y_predicted2.flatten()[:6], resample=Image.BICUBIC)
-        #file3 = open( "C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\output3.txt", "w" ) 
-        #print(pytesseract.image_to_string(img_result2), file=file3)
-        #file3.flush()
-        #file3.close()
-
-        plt.imshow(np.asarray(img_result2), cmap='gray')
-        plt.show()
-
 def GenerateSegmentationData():
     frames = open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\frames_full", "ab")
     boxes = open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\boxes_full", "ab")
@@ -324,7 +205,6 @@ def GenerateSegmentationData():
                 vidcap = cv2.VideoCapture(os.path.join(r, file))
                 success,image = vidcap.read()
                 while success:
-                    #gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
                     resize = cv2.resize(image, (int(image.shape[1]/2), int(image.shape[0]/2)), interpolation= cv2.INTER_LANCZOS4)
                     array = np.asarray(resize)
                     array.tofile(frames)  
@@ -342,31 +222,6 @@ def GenerateSegmentationData():
                         vector[count + 1] = float(point.attrib["y"]) / 2
                         count = count + 2
                     vector.tofile(boxes)
-
-
-#def BoundingBoxes():
-#    file = r'C:\\Users\\jxmr\\Desktop\\ProjectIII\\rvl-cdip\\images\\imagesm\\m\\a\\a\\maa00d00\\50307296-7296.tif'
-#    im1 = cv2.imread(file,0)
-#    im = cv2.imread(file)
-#    ret,thresh1 = cv2.threshold(im1,180,278,cv2.THRESH_BINARY)
-#    contours, hierarchy = cv2.findContours(thresh1,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-#    for cnt in contours:
-#	    x,y,w,h = cv2.boundingRect(cnt)
-#	    cv2.rectangle(im,(x,y),(x+w,y+h),(0,255,0),1)
-#    #i=0
-#    #for cnt in contours:
-#	   # x,y,w,h = cv2.boundingRect(cnt)
-#	   # #following if statement is to ignore the noises and save the images which are of normal size(character)
-#	   # #In order to write more general code, than specifying the dimensions as 100,
-#	   # # number of characters should be divided by word dimension
-#	   # if w>100 and h>100:
-#		  #  #save individual images
-#		  #  cv2.imwrite(str(i)+".jpg",thresh1[y:y+h,x:x+w])
-#		  #  i=i+1
-#    cv2.namedWindow('BindingBox', cv2.WINDOW_NORMAL)
-#    cv2.imwrite('C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\BindingBox3.jpg',im)
-#    img = Image.open('C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\BindingBox3.jpg')    
-#    img.show()
 
 def ShuffleSegementationData():
     X_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\frames", dtype=np.dtype("(518400,)u1"))
@@ -691,176 +546,239 @@ class DataGenerator(Sequence):
 
         # Generate data
         for i, ID in enumerate(list_IDs_temp):
-            X[i] = np.fromfile(self.X_src, dtype=np.dtype("(" + str(self.n_features) + ",)u1"), count=1, offset=self.n_features*ID)
-            Y[i] = np.fromfile(self.Y_src, dtype=np.dtype("(" + str(self.n_outputs) + ",)u1"), count=1, offset=self.n_outputs*ID)
+            X[i] = np.fromfile(self.X_src, dtype=np.dtype("(" + str(self.n_features) + ",)f8"), count=1, offset=self.n_features*ID*8)
+            Y[i] = np.fromfile(self.Y_src, dtype=np.dtype("(" + str(self.n_outputs) + ",)f8"), count=1, offset=self.n_outputs*ID*8)
 
         return self.preprocessing(X, Y, self.scalerX, self.scalerY)
 
-def Replicate():
-    nn = pickle.load( open( "C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\nn3.p", "rb" ) )
-    weights = nn.coefs_
-    intercepts = nn.intercepts_
-    print (len(weights))
-    print(weights[0].shape)
-    print(weights[1].shape)
+def ExtractIndividualFrames():
+    frames = "C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Data\\frames"
+    masks = "C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Data\\masks"
 
-    print (len(intercepts))
-    print(intercepts[0].shape)
-
-    hidden_layers = [layers.Dense(100, activation='relu', input_shape=[188000])]
-    for i in range(16):
-        hidden_layers.append(layers.Dense(100, activation='relu'))
-    hidden_layers.append(layers.Dense(9))
-
-    model = keras.Sequential(hidden_layers)
-
-    optimizer = tf.keras.optimizers.SGD(learning_rate=0.001, momentum=0.9, nesterov=True)
-
-    model.compile(loss='mse',
-                optimizer=optimizer,
-                metrics=['mae', 'mse', 'accuracy'])
-
-    for i in range(len(model.layers)):
-        print(model.layers[i].get_weights()[0].shape)
-        print(model.layers[i].get_weights()[1].shape)
-        model.layers[i].set_weights([weights[i], intercepts[i]])
-
-    X_test = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_imagese.txt", dtype=np.dtype("(188000,)u1"))
-    y_test = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms_imagese.txt", dtype=np.dtype("(3,3)f8"))
-
-    list = []
-
-    for r, d, f in os.walk("C:\\Users\\jxmr\\Desktop\\ProjectIII\\rvl-cdip\\images\\imagese"):
+    for r, d, f in os.walk("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\testDataset"):
         for file in f:
-            list.append(os.path.join(r, file))
+            if file.endswith(".avi"):
+                vidcap = cv2.VideoCapture(os.path.join(r, file))
+                success,img = vidcap.read()
+                count = 1
+                coors = file[:-4] + ".gt.xml"
+                tree = ET.parse(os.path.join(r, coors))
+                root = tree.getroot()
+                directory = os.path.basename(os.path.normpath(r))
+                while success:  
+                    img = cv2.resize(img, (int(img.shape[1]/2), int(img.shape[0]/2)), interpolation= cv2.INTER_LANCZOS4)
+                    cv2.imwrite(os.path.join(frames, directory + file[:-4] + "frame" + str(count) + ".png"), img)
+                    pts = np.zeros(8)
+                    frame = list(root.iter("frame"))[count-1]
+                    index = 0
+                    for point in frame.iter("point"):
+                        pts[index] = round(float(point.attrib["x"]) / 2) 
+                        pts[index + 1] = round(float(point.attrib["y"]) / 2)
+                        index = index + 2
+                    height,width,depth = img.shape
+                    mask_img = np.zeros((height,width), np.uint8)
+                    pts = np.array([[pts[0], pts[1]],[pts[2], pts[3]],[pts[4], pts[5]],[pts[6], pts[7]]], np.int32)
+                    cv2.polylines(mask_img, [pts], True, 255)
+                    masked_data = cv2.bitwise_and(img, img, mask=mask_img)
+                    cv2.fillPoly(masked_data, [pts], (255, 255, 255, 255))
+                    cv2.imwrite(os.path.join(masks, directory + file[:-4] + "mask" + str(count) + ".png"), masked_data)
+                    count = count + 1
+                    success,img = vidcap.read()                
 
-    for i in range(0, int(X_test.shape[0] / 2), 2):
+import utils
+from config import Config
+from utils import *
+from model import MaskRCNN
+from visualize import *
+import fileinput
 
-        y_predicted1 = model.predict(X_test[i].reshape(1, -1))[0]
-        y_predicted2 = model.predict(X_test[i+1].reshape(1, -1))[0]
+class SegmentationConfig(Config):
+    """Configuration for training on the toy shapes dataset.
+    Derives from the base Config class and overrides values specific
+    to the toy shapes dataset.
+    """
+    # Give the configuration a recognizable name
+    NAME = "segmentation"
+   
 
-        fileName = list[i]
-        print(fileName)
-        img = Image.open(fileName)
-        plt.imshow(np.asarray(img), cmap='gray')
-        plt.show()  
-        T_inv1 = np.linalg.inv(y_test[i])
-        img_transformation1 = img.transform((img.size[0], img.size[1]), Image.AFFINE, data=T_inv1.flatten()[:6], resample=Image.BICUBIC)
-        plt.imshow(np.asarray(img_transformation1), cmap='gray')
-        plt.show()  
-        img_result1 = img_transformation1.transform((img_transformation1.size[0], img_transformation1.size[1]), Image.AFFINE, data=y_predicted1.flatten()[:6], resample=Image.BICUBIC)
-        plt.imshow(np.asarray(img_result1), cmap='gray')
-        plt.show()  
+    # Train on 1 GPU and 1 images per GPU. Batch size is 1 (GPUs * images/GPU).
+    GPU_COUNT = 1
+    IMAGES_PER_GPU = 1
 
-        T_inv2 = np.linalg.inv(y_test[i+1])
-        img_transformation2 = img.transform((img.size[0], img.size[1]), Image.AFFINE, data=T_inv2.flatten()[:6], resample=Image.BICUBIC)
-        plt.imshow(np.asarray(img_transformation2), cmap='gray')
-        plt.show()  
-        img_result2 = img_transformation2.transform((img_transformation2.size[0], img_transformation2.size[1]), Image.AFFINE, data=y_predicted2.flatten()[:6], resample=Image.BICUBIC)
+    # Number of classes (including background)
+    NUM_CLASSES = 1 + 1  # background + 1 shapes
 
-        plt.imshow(np.asarray(img_result2), cmap='gray')
-        plt.show()
+    # Use small images for faster training. Set the limits of the small side
+    # the large side, and that determines the image shape.
+    IMAGE_RESIZE_MODE = "square"
+    IMAGE_MIN_DIM = 540
+    IMAGE_MAX_DIM = 960
 
+class SegmentationDataset(Dataset):
+    def load(self, start, end):
+        self.add_class("segmentation", 1, "document")
 
-class LRMultiplier(tf.keras.optimizers.Optimizer):
+        count = 1
+        for r, d, f in os.walk("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Data\\frames"):
+            for file in f:
+                if count <= start and count <= end:
+                    self.add_image("segmentation", count, os.path.join(r, file))
+                    count = count + 1
 
-    def __init__(self,
-                 optimizer,
-                 multipliers,
-                 **kwargs):
-        """Initialize the optimizer wrapper.
-        :param optimizer: The original optimizer.
-        :param multipliers: A dict representing the multipliers.
-                            The key is the prefix of the weight to be multiplied.
-        :param kwargs: Arguments for parent class.
-        """
-        super(LRMultiplier, self).__init__(**kwargs)
-        self.optimizer = tf.keras.optimizers.get(optimizer)
-        self.multipliers = multipliers
-        if hasattr(self.optimizer, 'learning_rate'):
-            self.lr_attr = 'learning_rate'
+    def image_reference(self, image_id):
+
+        info = self.image_info[image_id]
+        if info["source"] == "shapes":
+            return info["shapes"]
         else:
-            self.lr_attr = 'lr'
+            super(self.__class__).image_reference(self, image_id)
 
-    @property
-    def lr(self):
-        return self.optimizer.lr
+    def load_mask(self, image_id):
+        info = self.image_info[image_id]
+        mask = cv2.imread(info["path"].replace("frame", "mask"))
+        mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
+        mask = mask > 128
+        mask = mask.reshape(mask.shape[0], mask.shape[1], 1)
 
-    @lr.setter
-    def lr(self, lr):
-        self.optimizer.lr = lr
+        return mask, np.ones([1], np.int32)
 
-    @property
-    def learning_rate(self):
-        return self.optimizer.learning_rate
+def TrainMaskRCNN():
+    ROOT_DIR = "C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Data"
 
-    @learning_rate.setter
-    def learning_rate(self, learning_rate):
-        try:
-            self.optimizer.learning_rate = learning_rate
-        except ValueError:
-            self.optimizer._hyper['learning_rate'] = learning_rate
+    # Directory to save logs and trained model
+    MODEL_DIR = os.path.join(ROOT_DIR, "logs")
 
-    def _get_multiplier(self, name):
-        multiplier, prefix_len = 1.0, 0
-        for key, val in self.multipliers.items():
-            if name.startswith(key):
-                if len(key) > prefix_len:
-                    prefix_len = len(key)
-                    multiplier = val
-        return multiplier
+    ## Local path to trained weights file
+    #COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
+    ## Download COCO trained weights from Releases if needed
+    #if not os.path.exists(COCO_MODEL_PATH):
+    #    utils.download_trained_weights(COCO_MODEL_PATH)
 
-    def get_updates(self, loss, params):
-        if len(self.updates) > 0:
-            return self.updates
-        multiplies = {}
-        for param in params:
-            multiplier = self._get_multiplier(param.name)
-            if multiplier not in multiplies:
-                multiplies[multiplier] = []
-            multiplies[multiplier].append(param)
+    config = SegmentationConfig()    
 
-        self.updates, self.weights = [], []
-        origin_lr = getattr(self, self.lr_attr)
-        for i, (multiplier, params) in enumerate(multiplies.items()):
-            lr = origin_lr
-            if callable(multiplier):
-                lr = lr * multiplier(tf.keras.backend.cast(self.optimizer.iterations, K.floatx()))
-            elif multiplier != 1.0:
-                lr = lr * multiplier
-            setattr(self, self.lr_attr, lr)
-            with tf.keras.backend.name_scope('Group_{}'.format(i)):
-                self.updates += self.optimizer.get_updates(loss, params)
-            print(self.multipliers, i, self.optimizer.weights)
-            for w in self.optimizer.weights:
-                if w not in self.weights:
-                    self.weights.append(w)
-        setattr(self, self.lr_attr, origin_lr)
+    # Training dataset
+    dataset_train = SegmentationDataset()
+    dataset_train.load(501, 24889)
+    dataset_train.prepare()
 
-        return self.updates
+    # Validation dataset
+    dataset_val = SegmentationDataset()
+    dataset_val.load(1, 500)
+    dataset_val.prepare()
 
-    def get_config(self):
-        config = {
-            'optimizer': tf.keras.optimizers.serialize(self.optimizer),
-            'multipliers': self.multipliers
-        }
-        base_config = super(LRMultiplier, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+    model = MaskRCNN(mode="training", config=config, model_dir=MODEL_DIR)
 
-    def _create_slots(self, var_list):
-        for v in var_list:
-            self.add_slot(v, v.name[:-2])
-        
-    def _resource_apply_dense(self, grad, handle):
-        return
+    #model.load_weights(COCO_MODEL_PATH, by_name=True, exclude=["mrcnn_class_logits", "mrcnn_bbox_fc", "mrcnn_bbox", "mrcnn_mask"])
 
-    def _apply_dense(self, grad, var):
-        return
+    model.train(dataset_train, dataset_val, learning_rate=config.LEARNING_RATE, epochs=15, layers='all')
+    model_path = os.path.join(MODEL_DIR, "mask_rcnn_shapes.h5")
+    model.keras_model.save_weights(model_path)
 
-    @classmethod
-    def from_config(cls, config):
-        optimizer = tf.keras.optimizers.deserialize(config.pop('optimizer'))
-        return cls(optimizer, **config)
+def get_ax(rows=1, cols=1, size=8):
+    """Return a Matplotlib Axes array to be used in
+    all visualizations in the notebook. Provide a
+    central point to control graph sizes.
+    
+    Change the default size attribute to control the size
+    of rendered images
+    """
+    _, ax = plt.subplots(rows, cols, figsize=(size*cols, size*rows))
+    return ax
 
+def RunMaskRCNN():
+
+    ROOT_DIR = "C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Data"
+
+    # Directory to save logs and trained model
+    MODEL_DIR = os.path.join(ROOT_DIR, "logs")
+
+    config = SegmentationConfig()
+
+    # Recreate the model in inference mode
+    model = MaskRCNN(mode="inference", config=config, model_dir=MODEL_DIR)
+
+    # Get path to saved weights
+    # Either set a specific path or find last trained weights
+    # model_path = os.path.join(ROOT_DIR, ".h5 file name here")
+    model_path = model.find_last()
+
+    # Load trained weights
+    print("Loading weights from ", model_path)
+    model.load_weights(model_path, by_name=True)
+
+    #nn = []
+    #with CustomObjectScope({'r_squared': R_squared}):
+    #nn = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasmodel.h5", custom_objects={'R_squared': R_squared})
+
+    #scalerx = load('C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\std_scalerx.bin')
+    #scalery = load('C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\std_scalery.bin')
+
+    for r, d, f in os.walk("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\sampleDataset\\input_sample\\background00"):
+        for file in f:
+            if file.endswith("magazine001.avi"):
+                p = os.path.join(r, file)
+                print(p)
+                vidcap = cv2.VideoCapture(p)
+                success,image = vidcap.read()
+                while success:
+                    plt.figure(figsize=(15, 15))
+                    plt.subplot(1,2,1)
+                    plt.imshow(image)
+
+                    resize = cv2.resize(image, (int(image.shape[1]/2), int(image.shape[0]/2)), interpolation= cv2.INTER_LANCZOS4)
+
+                    results = model.detect([resize], verbose=1)
+
+                    r = results[0]
+
+                    #display_instances(resize, r['rois'], r['masks'], r['class_ids'], ['BG', 'document'], r['scores'])
+
+                    roi = resize[r['rois'][0][0]:r['rois'][0][2], r['rois'][0][1]:r['rois'][0][3], :]
+                    plt.subplot(1,2,2)
+                    plt.imshow(roi)
+
+                    #roi_input= cv2.resize(roi, (754, 1000), interpolation = cv2.INTER_CUBIC)
+                    #roi_input = cv2.cvtColor(roi_input, cv2.COLOR_BGR2GRAY)
+                    #roi_input = cv2.adaptiveThreshold(roi_input, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+                    ##plt.subplot(1,4,4)
+                    ##plt.imshow(roi_gray, cmap='gray')
+                    #plt.subplot(2,2,3)
+                    #plt.imshow(roi_input)
+
+                    #X = roi_input.reshape(1, -1) / 255
+
+                    #y_predicted = nn.predict(X.astype(np.float32))[0]
+                    #y_predicted = scalery.inverse_transform(y_predicted)
+                    ##bsize = 200
+                    ##roi = cv2.copyMakeBorder(roi, top=bsize, bottom=bsize, left=bsize, right=bsize, borderType=cv2.BORDER_CONSTANT)
+                    #img_result = cv2.warpPerspective(roi, y_predicted.reshape(3, 3), (roi.shape[1] + 100, roi.shape[0] + 100))
+                    #plt.subplot(2,2,4)
+                    #plt.imshow(img_result)
+                    plt.show()  
+
+                    success,image = vidcap.read()
+
+def Test():
+    for r, d, f in os.walk("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\sampleDataset\\input_sample\\background00"):
+        for file in f:
+            if file.endswith("magazine001.avi"):
+                p = os.path.join(r, file)
+                print(p)
+                vidcap = cv2.VideoCapture(p)
+                success,image = vidcap.read()
+                for i in range(29):
+                    success,image = vidcap.read()
+
+                plt.subplot(1,2,1)
+                plt.imshow(image)
+                img = ImageTransformer(p, None, image)
+                img.image = image
+                img.height = image.shape[0]
+                img.width = image.shape[1]
+                im, tranform = img.rotate_along_axis(theta=30)
+                plt.subplot(1,2,2)
+                plt.imshow(im)
+                plt.show()            
+                    
 if __name__ == '__main__':
-    ValidateSegmentation()
+    GenerateData()
