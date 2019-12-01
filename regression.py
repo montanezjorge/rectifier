@@ -1,9 +1,9 @@
 import os
 #os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
 #os.environ["CUDA_VISIBLE_DEVICES"] = '-1'
-seednumber = 8
-from numpy.random import seed
-seed(seednumber)
+#seednumber = 8
+#from numpy.random import seed
+#seed(seednumber)
 import tensorflow as tf
 #tf.random.set_seed(seednumber)
 from affine import Affine
@@ -40,13 +40,20 @@ import image_transformer
 from image_transformer import *
 
 def GenerateData():
-    systemRandom = random.SystemRandom()
 
+    systemRandom = random.SystemRandom()
     iter = 0
 
     for dir in os.listdir("C:\\Users\\jxmr\\Desktop\\ProjectIII\\rvl-cdip\\images"):
-        images=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_preprocessed", "ab")
-        transforms=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms", "ab")            
+        imagesX=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImagesX", "ab")
+        imagesY=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImagesY", "ab")
+        imagesZ=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImagesZ", "ab")
+        transformsX=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformsX", "ab")            
+        transformsY=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformsY", "ab")            
+        transformsZ=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformsZ", "ab")            
+        anglesX=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\anglesX", "ab")   
+        anglesY=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\anglesY", "ab")  
+        anglesZ=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\anglesZ", "ab")  
 
         if iter == 5:
             break
@@ -58,444 +65,72 @@ def GenerateData():
 
                 fileName = os.path.join(r, file)
                 print(fileName)
+
                 theta = systemRandom.uniform(-30.0, 30.0)
                 phi = systemRandom.uniform(-30.0, 30.0)
                 gamma = systemRandom.uniform(-30.0, 30.0)
-                img = ImageTransformer(fileName, shape = (754, 1000))
-                im, transform = img.rotate_along_axis(theta, phi, gamma)
-                im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-                cv2.threshold(im ,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-                im = im / 255
-                transform = np.linalg.inv(transform)
-                im.tofile(images)
-                transform.tofile(transforms)
 
-        transforms.close()
-        images.close() 
+                img = ImageTransformer(fileName, shape=(754, 1000))
+                im1, transform1 = img.rotate_along_axis(theta=theta)
+                im2, transform2 = img.rotate_along_axis(phi=phi)
+                im3, transform3 = img.rotate_along_axis(gamma=gamma)
 
-def PreprocessData():
+                transform1.tofile(transformsX)
+                transform2.tofile(transformsY)
+                transform3.tofile(transformsZ)
+                im1.tofile(imagesX)
+                im2.tofile(imagesY)
+                im3.tofile(imagesZ)
+                np.asarray(theta).tofile(anglesX)
+                np.asarray(phi).tofile(anglesY)
+                np.asarray(gamma).tofile(anglesZ)
 
-    Y_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms", dtype=np.dtype("(9,)f8"))
-    scalery = StandardScaler(copy=False)
-    Y_train = scalery.fit_transform(Y_train)
-    dump(scalery, 'C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\std_scalery.bin', compress=True)
-    Y_train.tofile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms_preprocessed")  
-
-def ValidateTrainingData():
-    Y_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms_preprocessed", dtype=np.dtype("(9,)f8"))
-    print(Y_train.shape)
-
-    ID = 0
-
-    while True:
-        im = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_preprocessed", dtype=np.dtype("(754000,)f8"), count=1, offset=754000*ID*8)
-        im = (im.reshape(754, 1000) * 255).astype(np.uint8)
-        plt.imshow(im)
-        plt.show()
-        ID = ID + 1
-
-
+        imagesX.close() 
+        imagesY.close() 
+        imagesZ.close() 
+        transformsX.close()
+        transformsY.close()
+        transformsZ.close()
+        anglesX.close()
+        anglesY.close()
+        anglesZ.close()
 
 def Train():
-    hidden_layers = [layers.Dense(units=100, 
-                                  activation='relu', 
-                                  input_shape=[754000], 
-                                  kernel_initializer=keras.initializers.glorot_uniform(), 
-                                  bias_initializer=keras.initializers.glorot_uniform())]
-    for i in range(16):
-        hidden_layers.append(layers.Dense(units=100, 
-                                          activation='relu',
-                                          kernel_initializer=keras.initializers.glorot_uniform(), 
-                                          bias_initializer=keras.initializers.glorot_uniform()))
-    hidden_layers.append(layers.Dense(units=9, use_bias=False))
 
-    model = keras.Sequential(hidden_layers)
+    x = img_input = Input(shape=(2262000), name="data")
+
+    for i in range(17):
+        x = layers.Dense(units=100, 
+                    activation='relu', 
+                    kernel_initializer=keras.initializers.glorot_uniform(), 
+                    bias_initializer=keras.initializers.glorot_uniform())(x)
+
+    x = Dense(units=1, use_bias=False)(x)
+
+    model = Model(inputs=[img_input], outputs=[x])
+    model.summary()
 
     reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_R_squared', verbose=1, patience=5, mode='max')
     early_stopping = keras.callbacks.EarlyStopping(monitor='val_R_squared', min_delta=0.00005, patience=12, verbose=1, mode='max', baseline=None, restore_best_weights=True)
     model.compile(loss='mse',
                 optimizer=keras.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=False),
-                metrics=['accuracy', R_squared])
+                metrics=[R_squared])
 
-    def emptyPreprocessing(X, Y, scalerX, scalerY):
-        return X, Y
+    X_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImagesY", dtype=np.dtype("(2262000,)u1"))[:45000]
+    y_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\anglesY", dtype=np.dtype("(1,)f8"))[:45000]
 
-    training_generator = DataGenerator("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_preprocessed", 
-                                       "C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms_preprocessed", 
-                                       0, 59999, 754000, 9, None, None, emptyPreprocessing, 25)
-    validation_generator = DataGenerator("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_preprocessed", 
-                                       "C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms_preprocessed",
-                                       60000, 65000, 754000, 9, None, None, emptyPreprocessing, 25)
+    reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_R_squared', verbose=1, patience=5, mode='max')
+    #early_stopping = keras.callbacks.EarlyStopping(monitor='val_R_squared', min_delta=0.00005, patience=12, verbose=1, mode='max', baseline=None, restore_best_weights=True)
 
-    model.fit_generator(generator=training_generator, validation_data=validation_generator, epochs=50, use_multiprocessing=True, workers=0, verbose=1, callbacks=[reduce_lr, early_stopping], shuffle=True)
-    model.save("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasmodel.h5")
+    model.fit(X_train, y_train, epochs=30, batch_size=25, validation_split=0.1, verbose=1, shuffle=True, callbacks=[reduce_lr])
+
+    model.save("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierY.h5")
 
 
 def R_squared(y, y_pred):
     residual = tf.reduce_sum(tf.square(tf.subtract(y, y_pred)))
     total = tf.reduce_sum(tf.square(tf.subtract(y, tf.reduce_mean(y))))
     return tf.subtract(1.0, tf.divide(residual, total))
-
-
-def ValidateTrainingWithKeras():
-
-    nn = []
-    with CustomObjectScope({'r_squared': R_squared}):
-        nn = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasmodel")
-
-    X_test = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_imagese.txt", dtype=np.dtype("(188000,)u1"))
-    y_test = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transforms_imagese.txt", dtype=np.dtype("(3,3)f8"))
-
-    scalerx = load('C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\std_scalerx.bin')
-    scalery = load('C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\std_scalery.bin')
-
-    X_test = scalerx.transform(X_test)
-
-    list = []
-
-    for r, d, f in os.walk("C:\\Users\\jxmr\\Desktop\\ProjectIII\\rvl-cdip\\images\\imagese"):
-        for file in f:
-            list.append(os.path.join(r, file))
-
-    #scaler = MinMaxScaler()
-
-    for i in range(0, int(X_test.shape[0] / 2), 2):
-
-        #X1 = scaler.fit_transform(X_test[i].reshape(1, -1))
-        #X2 = scaler.fit_transform(X_test[i+1].reshape(1, -1))
-
-        y_predicted1 = nn.predict(X_test[i].reshape(1, -1).astype(np.float32))[0]
-        y_predicted2 = nn.predict(X_test[i+1].reshape(1, -1).astype(np.float32))[0]
-
-        y_predicted1 = scalery.inverse_transform(y_predicted1)
-        y_predicted2 = scalery.inverse_transform(y_predicted2)
-
-        #scaler.fit_transform(y_test.reshape(y_test.shape[0], 9))
-
-        #y_predicted1 = scaler.inverse_transform(y_predicted1.reshape(1, -1))
-        #y_predicted2 = scaler.inverse_transform(y_predicted2.reshape(1, -1))
-
-        fileName = list[i]
-        print(fileName)
-        img = Image.open(fileName)
-        plt.imshow(np.asarray(img), cmap='gray')
-        plt.show()  
-        T_inv1 = np.linalg.inv(y_test[i])
-        img_transformation1 = img.transform((img.size[0], img.size[1]), Image.AFFINE, data=T_inv1.flatten()[:6], resample=Image.BICUBIC)
-        plt.imshow(np.asarray(img_transformation1), cmap='gray')
-        plt.show()  
-        img_result1 = img_transformation1.transform((img_transformation1.size[0], img_transformation1.size[1]), Image.AFFINE, data=y_predicted1.flatten()[:6], resample=Image.BICUBIC)
-        plt.imshow(np.asarray(img_result1), cmap='gray')
-        plt.show()  
-        T_inv2 = np.linalg.inv(y_test[i+1])
-        img_transformation2 = img.transform((img.size[0], img.size[1]), Image.AFFINE, data=T_inv2.flatten()[:6], resample=Image.BICUBIC)
-        plt.imshow(np.asarray(img_transformation2), cmap='gray')
-        plt.show()  
-        img_result2 = img_transformation2.transform((img_transformation2.size[0], img_transformation2.size[1]), Image.AFFINE, data=y_predicted2.flatten()[:6], resample=Image.BICUBIC)
-        plt.imshow(np.asarray(img_result2), cmap='gray')
-        plt.show()
-
-def GenerateSegmentationData():
-    frames = open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\frames_full", "ab")
-    boxes = open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\boxes_full", "ab")
-
-    for r, d, f in os.walk("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\testDataset"):
-        for file in f:
-            if file.endswith(".avi"):
-                vidcap = cv2.VideoCapture(os.path.join(r, file))
-                success,image = vidcap.read()
-                while success:
-                    resize = cv2.resize(image, (int(image.shape[1]/2), int(image.shape[0]/2)), interpolation= cv2.INTER_LANCZOS4)
-                    array = np.asarray(resize)
-                    array.tofile(frames)  
-                    success,image = vidcap.read()
-                file = file[:-4] + ".gt.xml"
-                tree = ET.parse(os.path.join(r, file))
-                root = tree.getroot()
-                vector = np.zeros(9)
-                for frame in root.iter("frame"):
-                    if frame.attrib["rejected"] == "false":
-                        vector[0] = 1
-                    count = 1
-                    for point in frame.iter("point"):
-                        vector[count] = float(point.attrib["x"]) / 2 
-                        vector[count + 1] = float(point.attrib["y"]) / 2
-                        count = count + 2
-                    vector.tofile(boxes)
-
-def ShuffleSegementationData():
-    X_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\frames", dtype=np.dtype("(518400,)u1"))
-    y_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\boxes", dtype=np.dtype("(9,)f8"))
-
-    X_train, y_train = shuffle(X_train, y_train)
-
-    X_train.tofile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\frames_shuffled")
-    y_train.tofile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\boxes_shuffled")
-
-def TrainSegmentation():
-
-    hidden_layers = [layers.Dense(units=100, 
-                                activation='relu', 
-                                input_shape=[518400], 
-                                #kernel_regularizer = keras.regularizers.l2(0.001),
-                                #bias_regularizer = keras.regularizers.l2(0.001),
-                                #activity_regularizer = keras.regularizers.l1(0.001),
-                                kernel_initializer=keras.initializers.glorot_uniform(), 
-                                bias_initializer=keras.initializers.glorot_uniform())]
-    for i in range(10):
-        hidden_layers.append(layers.Dense(units=100, 
-                                    activation='relu', 
-                                    #kernel_regularizer = keras.regularizers.l2(0.001),
-                                    #bias_regularizer = keras.regularizers.l2(0.001),
-                                    #activity_regularizer = keras.regularizers.l1(0.001),
-                                    kernel_initializer=keras.initializers.glorot_uniform(), 
-                                    bias_initializer=keras.initializers.glorot_uniform()))
-    hidden_layers.append(layers.Dense(units=9, use_bias=False))
-
-    model = keras.Sequential(hidden_layers)
-    model.compile(loss='mse',
-                optimizer=keras.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=False),
-                metrics=['accuracy', R_squared])
-
-    X_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\frames_processed_shuffled", dtype=np.dtype("(518400,)f8"))
-    y_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\boxes_processed_shuffled", dtype=np.dtype("(9,)f8"))
-
-    reduce_lr = keras.callbacks.ReduceLROnPlateau(verbose=1, patience=5)
-    early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', min_delta=0.00005, patience=20, verbose=1, mode='auto', baseline=None, restore_best_weights=True)
-    model.fit(X_train, y_train, epochs=400, batch_size=100, validation_split=0.1, verbose=1, shuffle=True, callbacks=[reduce_lr, early_stopping])
-    model.save("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\kerasmodel")
-
-def CNN():
-
-    data = Input(shape=(540, 960, 3), name="data")
-
-    conv1 = Conv2D(96, 11, name="conv1",  
-                strides=4, 
-                padding='same',
-                kernel_initializer=keras.initializers.RandomNormal(stddev=0.01), 
-                bias_initializer=keras.initializers.Constant(value=0),
-                kernel_regularizer=keras.regularizers.l2(1),
-                bias_regularizer=keras.regularizers.l2(0))(data)
-
-    relu1 = Activation("relu", name="relu1")(conv1)
-
-    pool1 = MaxPooling2D(pool_size=3, strides=2, name="pool1")(relu1)
-
-    norm1 = BatchNormalization(name="norm1")(pool1)
-
-
-    normalized1_1 = Lambda(lambda x: x[:, :, :, :48])(norm1)
-
-    normalized1_2 = Lambda(lambda x: x[:, :, :, 48:])(norm1)
-
-    conv2_1 = Conv2D(filters=128,
-                     kernel_size=5,
-                     activation='relu',
-                     strides=2,
-                     padding='same',
-                     kernel_initializer=keras.initializers.RandomNormal(stddev=0.01), 
-                     bias_initializer=keras.initializers.Constant(value=1),
-                     kernel_regularizer=keras.regularizers.l2(1),
-                     bias_regularizer=keras.regularizers.l2(0),
-                     name='conv2_1')(normalized1_1)
-
-    conv2_2 = Conv2D(filters=128,
-                     kernel_size=5,
-                     activation='relu',
-                     strides=2,
-                     padding='same',
-                     kernel_initializer=keras.initializers.RandomNormal(stddev=0.01), 
-                     bias_initializer=keras.initializers.Constant(value=1),
-                     kernel_regularizer=keras.regularizers.l2(1),
-                     bias_regularizer=keras.regularizers.l2(0),
-                     name='conv2_2')(normalized1_2)
-
-    conv2 = Concatenate(name='conv_2_merge')([conv2_1, conv2_2])
-
-    relu2 = Activation("relu", name="relu2")(conv1)
-
-    pool2 = MaxPooling2D(pool_size=3, strides=2, name="pool2")(relu2)
-
-    norm2 = BatchNormalization(name="norm2")(pool2)
-
-    conv3 = Conv2D(384, 3, name="conv3",  
-            strides=1, 
-            kernel_initializer=keras.initializers.RandomNormal(stddev=0.01), 
-            bias_initializer=keras.initializers.Constant(value=0),
-            kernel_regularizer=keras.regularizers.l2(1),
-            bias_regularizer=keras.regularizers.l2(0))(norm2)
-
-    relu3 = Activation("relu", name="relu3")(conv3)
-
-    relu3_1 = Lambda(lambda x: x[:, :, :, :192])(relu3)
-
-    relu3_2 = Lambda(lambda x: x[:, :, :, 192:])(relu3)
-
-    conv4_1 = Conv2D(filters=192,
-                     kernel_size=3,
-                     activation='relu',
-                     strides=1,
-                     padding='same',
-                     kernel_initializer=keras.initializers.RandomNormal(stddev=0.01), 
-                     bias_initializer=keras.initializers.Constant(value=1),
-                     kernel_regularizer=keras.regularizers.l2(1),
-                     bias_regularizer=keras.regularizers.l2(0),
-                     name='conv4_1')(relu3_1)
-
-    conv4_2 = Conv2D(filters=192,
-                     kernel_size=3,
-                     activation='relu',
-                     strides=1,
-                     padding='same',
-                     kernel_initializer=keras.initializers.RandomNormal(stddev=0.01), 
-                     bias_initializer=keras.initializers.Constant(value=1),
-                     kernel_regularizer=keras.regularizers.l2(1),
-                     bias_regularizer=keras.regularizers.l2(0),
-                     name='conv4_2')(relu3_2)
-
-    conv4 = Concatenate(name='conv_4_merge')([conv4_1, conv4_2])
-
-    relu4 = Activation("relu", name="relu4")(conv4)
-
-    relu4_1 = Lambda(lambda x: x[:, :, :, :128])(relu3)
-
-    relu4_2 = Lambda(lambda x: x[:, :, :, 128:])(relu3)
-
-    conv5_1 = Conv2D(filters=128,
-                     kernel_size=3,
-                     activation='relu',
-                     strides=1,
-                     padding='same',
-                     kernel_initializer=keras.initializers.RandomNormal(stddev=0.01), 
-                     bias_initializer=keras.initializers.Constant(value=1),
-                     kernel_regularizer=keras.regularizers.l2(1),
-                     bias_regularizer=keras.regularizers.l2(0),
-                     name='conv5_1')(relu3_1)
-
-    conv5_2 = Conv2D(filters=128,
-                     kernel_size=3,
-                     activation='relu',
-                     strides=1,
-                     padding='same',
-                     kernel_initializer=keras.initializers.RandomNormal(stddev=0.01), 
-                     bias_initializer=keras.initializers.Constant(value=1),
-                     kernel_regularizer=keras.regularizers.l2(1),
-                     bias_regularizer=keras.regularizers.l2(0),
-                     name='conv5_2')(relu3_2)
-
-    conv5 = Concatenate(name='conv_5_merge')([conv5_1, conv5_2])
-
-
-    relu5 = Activation("relu", name="relu5")(conv5)
-
-    pool5 = MaxPooling2D(pool_size=3, strides=2, name="pool5")(relu5)
-
-    fc6 = Dense(4096,
-                     kernel_initializer=keras.initializers.RandomNormal(stddev=0.005), 
-                     bias_initializer=keras.initializers.Constant(value=1),
-                     kernel_regularizer=keras.regularizers.l2(1),
-                     bias_regularizer=keras.regularizers.l2(0),
-                     name="fc6")(pool5)
-
-    relu6 = Activation("relu", name="relu6")(fc6)
-
-    fc7 = Dense(4096,
-                     kernel_initializer=keras.initializers.RandomNormal(stddev=0.005), 
-                     bias_initializer=keras.initializers.Constant(value=1),
-                     kernel_regularizer=keras.regularizers.l2(1),
-                     bias_regularizer=keras.regularizers.l2(0),
-                     name="fc7")(relu6)
-
-    relu7 = Activation("relu", name="relu7")(fc7)
-
-    fc8 = Flatten()(relu7)
-    pred = Dense(units=9, use_bias=False, name="pred")(fc8)
-
-    model = Model(inputs=[data], outputs=[pred])
-    model.summary()
-    model.compile(loss='mse',
-                   optimizer='adam',
-                   metrics=['accuracy', R_squared])
-    
-    X_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\frames_full", dtype=np.dtype("(540, 960, 3)u1"))
-    Y_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\boxes_full", dtype=np.dtype("(9,)f8"))
-
-    reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_R_squared', verbose=1, patience=8, mode='max')
-    early_stopping = keras.callbacks.EarlyStopping(monitor='val_R_squared', min_delta=0.0002, patience=15, verbose=1, mode='max', baseline=None, restore_best_weights=True)
-
-    model.fit(X_train, Y_train, epochs=80, batch_size=10, validation_split=0.1, verbose=1, shuffle=True, callbacks=[reduce_lr, early_stopping])
-    model.save("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\kerasmodel")
-
-
-def TrainSegmentationWithGenerator():
-    model = keras.Sequential()
-    model.add(Dense(100, activation='relu', input_shape=[2073600], kernel_initializer=keras.initializers.glorot_uniform(),  bias_initializer=keras.initializers.glorot_uniform()))
-    for i in range(32):
-        model.add(Dense(100, activation='relu', kernel_initializer=keras.initializers.glorot_uniform(),  bias_initializer=keras.initializers.glorot_uniform()))
-    model.add(Dense(9))
-
-    model.compile(loss='mse',
-        optimizer=keras.optimizers.SGD(learning_rate=0.1, momentum=0.9, nesterov=True),
-        metrics=['accuracy', R_squared])
-
-    reduce_lr = keras.callbacks.ReduceLROnPlateau(verbose=1, patience=5)
-    early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', min_delta=0.00005, patience=10, verbose=1, mode='auto', baseline=None, restore_best_weights=True)
-
-    def preprocessing(X, Y, scalerX, scalerY):
-        scalerX.partial_fit(X)
-        scalerY.partial_fit(Y)
-        X = scalerX.transform(X)
-        Y = scalerY.transform(Y)
-        return X, Y
-
-    scalerX = StandardScaler(copy=False)
-    scalerY = StandardScaler(copy=False)
-
-    training_generator = DataGenerator("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\frames", 
-                                       "C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\boxes", 
-                                       0, 20000, 2073600, 9, scalerX, scalerY, preprocessing, 50)
-    validation_generator = DataGenerator("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\frames", 
-                                       "C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\boxes", 
-                                       20000, 24000, 2073600, 9, scalerX, scalerY, preprocessing, 50)
-
-    model.fit_generator(generator=training_generator, validation_data=validation_generator, epochs=20, use_multiprocessing=True, workers=0, verbose=1, callbacks=[reduce_lr, early_stopping], shuffle=True)
-
-    dump(scalerX, 'C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\std_scalerx_segmentation.bin', compress=True)
-    dump(scalerY, 'C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\std_scalery_segmentation.bin', compress=True)
-
-    model.save("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\kerasmodel")
-
-def ValidateSegmentation():
-    model = []
-    with CustomObjectScope({'R_squared': R_squared}):
-        model = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\kerasmodelBackup")
-
-    #scalerX = load('C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\std_scalerx_segmentation.bin')
-    #scalerY = load('C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Images\\std_scalery_segmentation.bin')
-
-    for r, d, f in os.walk("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\testDataset\\background05"):
-        for file in f:
-            if file.endswith(".avi"):
-                p = os.path.join(r, file)
-                print(p)
-                vidcap = cv2.VideoCapture(p)
-                success,image = vidcap.read()
-                while success:
-                    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-                    resize = cv2.resize(gray, (int(gray.shape[1]/2), int(gray.shape[0]/2)), interpolation= cv2.INTER_LANCZOS4)
-                    array = np.asarray(resize).reshape(1,540,960,1).astype(np.float)
-                    test_predictions = model.predict(array)
-                    #test_predictions = model.predict(scalerX.transform(array))
-                    prediction = test_predictions[0]
-                    prediction[1:] = prediction[1:] * 2
-                    print(prediction)
-                    pts = np.array([[prediction[1], prediction[2]],[prediction[3], prediction[4]],[prediction[5], prediction[6]],[prediction[7], prediction[8]]], np.int32)
-                    cv2.polylines(image, [pts], True, (0, 0, 255))
-                    cv2.imshow('Window', image)
-                    cv2.waitKey(0)
-                    success,image = vidcap.read()
-
-    cv2.destroyAllWindows()
 
 class DataGenerator(Sequence):
     'Generates data for Keras'
@@ -546,10 +181,10 @@ class DataGenerator(Sequence):
 
         # Generate data
         for i, ID in enumerate(list_IDs_temp):
-            X[i] = np.fromfile(self.X_src, dtype=np.dtype("(" + str(self.n_features) + ",)f8"), count=1, offset=self.n_features*ID*8)
+            X[i] = (np.fromfile(self.X_src, dtype=np.dtype("(" + str(self.n_features) + ",)u1"), count=1, offset=self.n_features*ID) / 255).astype(np.float32)
             Y[i] = np.fromfile(self.Y_src, dtype=np.dtype("(" + str(self.n_outputs) + ",)f8"), count=1, offset=self.n_outputs*ID*8)
 
-        return self.preprocessing(X, Y, self.scalerX, self.scalerY)
+        return X, Y
 
 def ExtractIndividualFrames():
     frames = "C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Data\\frames"
@@ -706,23 +341,18 @@ def RunMaskRCNN():
     print("Loading weights from ", model_path)
     model.load_weights(model_path, by_name=True)
 
-    #nn = []
-    #with CustomObjectScope({'r_squared': R_squared}):
-    #nn = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasmodel.h5", custom_objects={'R_squared': R_squared})
-
-    #scalerx = load('C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\std_scalerx.bin')
-    #scalery = load('C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\std_scalery.bin')
+    nn = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierX.h5", custom_objects={'R_squared': R_squared})
 
     for r, d, f in os.walk("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\sampleDataset\\input_sample\\background00"):
         for file in f:
-            if file.endswith("magazine001.avi"):
+            if file.endswith("datasheet001.avi"):
                 p = os.path.join(r, file)
                 print(p)
                 vidcap = cv2.VideoCapture(p)
                 success,image = vidcap.read()
                 while success:
                     plt.figure(figsize=(15, 15))
-                    plt.subplot(1,2,1)
+                    plt.subplot(1,3,1)
                     plt.imshow(image)
 
                     resize = cv2.resize(image, (int(image.shape[1]/2), int(image.shape[0]/2)), interpolation= cv2.INTER_LANCZOS4)
@@ -733,27 +363,28 @@ def RunMaskRCNN():
 
                     #display_instances(resize, r['rois'], r['masks'], r['class_ids'], ['BG', 'document'], r['scores'])
 
-                    roi = resize[r['rois'][0][0]:r['rois'][0][2], r['rois'][0][1]:r['rois'][0][3], :]
-                    plt.subplot(1,2,2)
+                    roi = resize[r['rois'][0][0]-20:r['rois'][0][2]+20,r['rois'][0][1]-20:r['rois'][0][3]+20, :]
+                    roi = cv2.resize(roi, (754, 1000))
+
+                    plt.subplot(1,3,2)
                     plt.imshow(roi)
 
-                    #roi_input= cv2.resize(roi, (754, 1000), interpolation = cv2.INTER_CUBIC)
-                    #roi_input = cv2.cvtColor(roi_input, cv2.COLOR_BGR2GRAY)
-                    #roi_input = cv2.adaptiveThreshold(roi_input, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-                    ##plt.subplot(1,4,4)
-                    ##plt.imshow(roi_gray, cmap='gray')
-                    #plt.subplot(2,2,3)
-                    #plt.imshow(roi_input)
+                    composition = np.array([[1, 0, 0],
+                                          [0, 1, 0],
+                                          [0, 0, 1]]).astype(np.float64)
+                    intermediate = roi
 
-                    #X = roi_input.reshape(1, -1) / 255
+                    for i in range(90):
 
-                    #y_predicted = nn.predict(X.astype(np.float32))[0]
-                    #y_predicted = scalery.inverse_transform(y_predicted)
-                    ##bsize = 200
-                    ##roi = cv2.copyMakeBorder(roi, top=bsize, bottom=bsize, left=bsize, right=bsize, borderType=cv2.BORDER_CONSTANT)
-                    #img_result = cv2.warpPerspective(roi, y_predicted.reshape(3, 3), (roi.shape[1] + 100, roi.shape[0] + 100))
-                    #plt.subplot(2,2,4)
-                    #plt.imshow(img_result)
+                        y_predicted = nn.predict(intermediate.reshape(1, 2262000))[0]
+                        print(y_predicted)
+                        transformer = ImageTransformer("", image=intermediate, shape = None)
+                        transform = transformer.get_transformation_matrix(theta=y_predicted[0])
+                        composition = np.matmul(composition, transform)
+                        intermediate = cv2.warpPerspective(roi, composition, (intermediate.shape[1], intermediate.shape[0]), flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP)
+
+                    plt.subplot(1,3,3)
+                    plt.imshow(intermediate)
                     plt.show()  
 
                     success,image = vidcap.read()
@@ -765,20 +396,46 @@ def Test():
                 p = os.path.join(r, file)
                 print(p)
                 vidcap = cv2.VideoCapture(p)
-                success,image = vidcap.read()
+                success,img = vidcap.read()
                 for i in range(29):
-                    success,image = vidcap.read()
+                    success,img = vidcap.read()
 
-                plt.subplot(1,2,1)
-                plt.imshow(image)
-                img = ImageTransformer(p, None, image)
-                img.image = image
-                img.height = image.shape[0]
-                img.width = image.shape[1]
-                im, tranform = img.rotate_along_axis(theta=30)
-                plt.subplot(1,2,2)
-                plt.imshow(im)
-                plt.show()            
+                for i in range(0, 10, 1):
+                    plt.subplot(1,2,1)
+                    plt.imshow(img)
+
+                    transformer = ImageTransformer(p, None, image=img)
+                    transformer.focal = 5
+                    im, transform = transformer.rotate_along_axis(gamma=90)
+                    transformer = ImageTransformer(p, None, image=im)
+                    im = transformer.shear(y=-i/10)
+                    plt.subplot(1,2,2)
+                    plt.imshow(im)
+                    plt.show()  
+
+class CropLayer(object):
+    def __init__(self, params, blobs):
+        self.xstart = 0
+        self.xend = 0
+        self.ystart = 0
+        self.yend = 0
+
+    # Our layer receives two inputs. We need to crop the first input blob
+    # to match a shape of the second one (keeping batch size and number of channels)
+    def getMemoryShapes(self, inputs):
+        inputShape, targetShape = inputs[0], inputs[1]
+        batchSize, numChannels = inputShape[0], inputShape[1]
+        height, width = targetShape[2], targetShape[3]
+
+        self.ystart = (inputShape[2] - targetShape[2]) // 2
+        self.xstart = (inputShape[3] - targetShape[3]) // 2
+        self.yend = self.ystart + height
+        self.xend = self.xstart + width
+
+        return [[batchSize, numChannels, height, width]]
+
+    def forward(self, inputs):
+        return [inputs[0][:,:,self.ystart:self.yend,self.xstart:self.xend]]                
                     
 if __name__ == '__main__':
-    GenerateData()
+    RunMaskRCNN()

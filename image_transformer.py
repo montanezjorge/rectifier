@@ -53,8 +53,20 @@ class ImageTransformer(object):
         
         return cv2.warpPerspective(self.image.copy(), mat, (self.width, self.height), flags=cv2.INTER_NEAREST), mat
 
+    def get_transformation_matrix(self, theta=0, phi=0, gamma=0, dx=0, dy=0, dz=0):
 
-    """ Get Perspective Projection Matrix """
+                # Get radius of rotation along 3 axes
+        rtheta, rphi, rgamma = get_rad(theta, phi, gamma)
+        
+        # Get ideal focal length on z axis
+        # NOTE: Change this section to other axis if needed
+        d = np.sqrt(self.height**2 + self.width**2)
+        self.focal = d / (2 * np.sin(rgamma) if np.sin(rgamma) != 0 else 1)
+        dz = self.focal
+
+        # Get projection matrix
+        return self.get_M(rtheta, rphi, rgamma, dx, dy, dz)
+
     def get_M(self, theta, phi, gamma, dx, dy, dz):
         
         w = self.width
@@ -105,13 +117,13 @@ class ImageTransformer(object):
 def load_image(img_path, shape=None, image=None):
     if image is not None:
         if shape is not None:
-            img = cv2.resize(image, shape, interpolation = cv2.INTER_CUBIC)
-        return img
+            image = cv2.resize(image, shape, interpolation = cv2.INTER_CUBIC)
+        return image
     else:
-        img = cv2.imread(img_path)
+        image = cv2.imread(img_path)
         if shape is not None:
-            img = cv2.resize(img, shape, interpolation = cv2.INTER_CUBIC)
-        return img
+            image = cv2.resize(image, shape, interpolation = cv2.INTER_CUBIC)
+        return image
 
 def save_image(img_path, img):
     cv2.imwrite(img_path, img)
