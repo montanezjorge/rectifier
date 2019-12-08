@@ -36,6 +36,7 @@
     <Content Include="deploy.prototxt" />
     <Content Include="environment.yml" />
     <Content Include="hed_pretrained_bsds.caffemodel" />
+    <Content Include="IMG_20191207_020339.jpg" />
   </ItemGroup>
   <ItemGroup>
     <InterpreterReference Include="Global|PythonCore|3.6" />

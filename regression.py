@@ -350,7 +350,7 @@ def RunMaskRCNN():
     model.load_weights(model_path, by_name=True)
 
     nnX = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierX.h5", custom_objects={'R_squared': R_squared})
-    nnY = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierY_2.h5", custom_objects={'R_squared': R_squared})
+    nnY = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierY.h5", custom_objects={'R_squared': R_squared})
     nnZ = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierZ.h5", custom_objects={'R_squared': R_squared})
     nnHS = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierHorizontalShear.h5", custom_objects={'R_squared': R_squared})
     nnVS = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierVerticalShear.h5", custom_objects={'R_squared': R_squared})
