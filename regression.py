@@ -6,20 +6,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = '-1'
 #seed(seednumber)
 import tensorflow as tf
 #tf.random.set_seed(seednumber)
-from affine import Affine
 from matplotlib import pyplot as plt
-from PIL import Image
-from datetime import datetime
-from io import StringIO
-from sklearn.model_selection import train_test_split
-from sklearn.neural_network import MLPRegressor
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import r2_score
-from sklearn import preprocessing
-from sklearn.preprocessing import StandardScaler
-from sklearn.externals.joblib import dump, load
-from sklearn.decomposition import PCA
-from sklearn.utils import shuffle
 from tensorflow import keras
 from tensorflow.keras import layers, backend as K
 from tensorflow.keras.models import load_model, Sequential, Model
@@ -31,7 +18,6 @@ from tensorflow.keras.optimizers import Optimizer, Adam
 import numpy as np
 import random
 import sys
-import pickle
 import warnings
 import pytesseract
 import cv2
