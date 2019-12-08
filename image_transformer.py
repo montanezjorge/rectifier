@@ -52,13 +52,25 @@ class ImageTransformer(object):
         
         return cv2.warpPerspective(self.image.copy(), mat, (self.width, self.height), flags=cv2.INTER_NEAREST), mat
 
-    def shear_along_axis(self, shx=0, shy=0, shz=0, axis=0, dx=0, dy=0, dz=0):
-              
-        self.focal = 1
-        dz = self.focal
+    def shear_horizontally(self, shear=0):
 
         # Get projection matrix
-        mat = self.get_Shear(shx, shy, shz, axis, dx, dy, dz)
+        mat =  np.array([   
+                    [1, shear, 0],
+                    [0, 1, 0],
+                    [0, 0, 1]
+                ])
+        
+        return cv2.warpPerspective(self.image.copy(), mat, (self.width, self.height), flags=cv2.INTER_NEAREST), mat
+
+    def shear_vertically(self, shear=0):
+
+        # Get projection matrix
+        mat =  np.array([   
+                    [1, 0, 0],
+                    [shear, 1, 0],
+                    [0, 0, 1]
+                ])
         
         return cv2.warpPerspective(self.image.copy(), mat, (self.width, self.height), flags=cv2.INTER_NEAREST), mat
 
@@ -75,56 +87,6 @@ class ImageTransformer(object):
 
         # Get projection matrix
         return self.get_M(rtheta, rphi, rgamma, dx, dy, dz)
-
-    def get_Shear(self, shx, shy, shz, axis, dx, dy, dz):
-        
-        w = self.width
-        h = self.height
-        f = self.focal
-
-        # Projection 2D -> 3D matrix
-        A1 = np.array([ [1, 0, -w/2],
-                        [0, 1, -h/2],
-                        [0, 0, 1],
-                        [0, 0, 1]])
-        
-        # Rotation matrices around the X, Y, and Z axis
-        Shear = np.array([ [1, 0, 0, 0],
-                        [0, 1, 0, 0],
-                        [0, 0, 1, 0],
-                        [0, 0, 0, 1]])
-       
-        if axis == 0:
-            Shear = np.array([ [1, 0, 0, 0],
-                    [shy, 1, 0, 0],
-                    [shz, 0, 1, 0],
-                        [0, 0, 0, 1]])
-
-        if axis == 1:
-            Shear = np.array([ [1, shx, 0, 0],
-                    [0, 1, 0, 0],
-                    [0, shz, 1, 0],
-                    [0, 0, 0, 1]])
-
-        if axis == 2:
-            Shear = np.array([ [1, 0, shx, 0],
-                    [0, 1, shy, 0],
-                    [0, 0, 1, 0],
-                    [0, 0, 0, 1]])
-
-        # Translation matrix
-        T = np.array([  [1, 0, 0, dx],
-                        [0, 1, 0, dy],
-                        [0, 0, 1, dz],
-                        [0, 0, 0, 1]])
-
-        # Projection 3D -> 2D matrix
-        A2 = np.array([ [f, 0, w/2, 0],
-                        [0, f, h/2, 0],
-                        [0, 0, 1, 0]])
-
-        # Final transformation matrix
-        return np.dot(A2, np.dot(T, np.dot(Shear, A1)))
 
     def get_M(self, theta, phi, gamma, dx, dy, dz):
         

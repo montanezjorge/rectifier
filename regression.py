@@ -46,13 +46,13 @@ def GenerateData():
     iter = 0
 
     for dir in os.listdir("C:\\Users\\jxmr\\Desktop\\ProjectIII\\rvl-cdip\\images"):
-        #imagesX=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImagesX_2", "ab")
+        imagesX=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImagesX", "ab")
         #imagesY=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImagesY", "ab")
         #imagesShear=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_Vertically_Sheared", "ab")
         #shears=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\vertical_shear", "ab")            
-        #transformsY=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformsY", "ab")            
+        transformsX=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformsX", "ab")            
         ##transformsZ=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformsZ_2", "ab")            
-        ##anglesX=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\anglesX_2", "ab")   
+        anglesX=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\anglesX", "ab")   
         #anglesY=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\anglesY", "ab")  
         #anglesZ=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\anglesZ_2", "ab")  
 
@@ -67,46 +67,16 @@ def GenerateData():
                 fileName = os.path.join(r, file)
                 print(fileName)
 
-                img = cv2.imread(fileName)
-                img = cv2.copyMakeBorder(img, top=500, bottom=500, left=0, right=0, borderType=cv2.BORDER_CONSTANT)
-                img = cv2.resize(img, (754, 1000), interpolation=cv2.INTER_CUBIC)
+                angle = systemRandom.uniform(-30.0 , 30.0)
+                transformer = ImageTransformer(fileName, shape = (754,1000))
 
-                shear = systemRandom.uniform(-0.60, 0.60)
-                transform1 = np.array([[1, 0, 0],
-                    [shear, 1, 0],
-                    [0, 0, 1]]).astype(np.double)
-                img1 = cv2.warpPerspective(img, transform1, (img.shape[1], img.shape[0]), flags=cv2.INTER_LINEAR)
+                img, transform = transformer.rotate_along_axis(theta=angle)
+                np.asarray(theta).tofile(anglesX)
+                img.tofile(imagesX)
 
-                plt.subplot(1, 2, 1)
-                plt.imshow(img1)
-                
-                plt.show()
-                #theta = systemRandom.uniform(-30.0, 30.0)
-                #phi = systemRandom.uniform(-45.0, 45.0)
-                #gamma = systemRandom.uniform(-30.0, 30.0)
-                
-                #transform.tofile(transformsX)
-                #transform.tofile(transformsY)
-                #np.asarray(shear).tofile(shears)
-                #img.tofile(imagesShear)
-                #im.tofile(imagesY)
-                ##im.tofile(imagesZ)
-                ##np.asarray(theta).tofile(anglesX)
-                #np.asarray(phi).tofile(anglesY)
-                #np.asarray(gamma).tofile(anglesZ)
-
-        #imagesShear.close()
-        #shears.close()
-        #imagesX.close() 
-        #imagesY.close() 
-        ##imagesZ.close() 
-        ##transformsX.close()
-        #transformsY.close()
-        ##transformsZ.close()
-        ##anglesX.close()
-        #anglesY.close()
-        #anglesZ.close()
-
+        imagesX.close() 
+        anglesX.close()
+        
 def Validate():
 
     systemRandom = random.SystemRandom()
@@ -166,15 +136,15 @@ def Train():
                 optimizer=keras.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=False),
                 metrics=[R_squared])
 
-    X_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_Vertically_Sheared", dtype=np.dtype("(2262000,)u1"))[:45000]
-    y_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\vertical_shear", dtype=np.dtype("(1,)f8"))[:45000]
+    X_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImagesX", dtype=np.dtype("(2262000,)u1"))[:45000]
+    y_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\anglesX", dtype=np.dtype("(1,)f8"))[:45000]
 
     reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_R_squared', verbose=1, patience=5, mode='max')
     early_stopping = keras.callbacks.EarlyStopping(monitor='val_R_squared', min_delta=0.00005, patience=12, verbose=1, mode='max', baseline=None, restore_best_weights=True)
 
     model.fit(X_train, y_train, epochs=30, batch_size=25, validation_split=0.1, verbose=1, shuffle=True, callbacks=[reduce_lr, early_stopping])
 
-    model.save("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierVerticalShear.h5")
+    model.save("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierX.h5")
 
 
 def R_squared(y, y_pred):
@@ -372,6 +342,8 @@ def get_ax(rows=1, cols=1, size=8):
 
 def RunMaskRCNN():
 
+    pytesseract.pytesseract.tesseract_cmd = r'C:\\Users\\jxmr\\Desktop\\ProjectIII\\wrapper\\tesseract.bat'
+
     ROOT_DIR = "C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\Data"
 
     # Directory to save logs and trained model
@@ -397,20 +369,13 @@ def RunMaskRCNN():
     nnHS = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierHorizontalShear.h5", custom_objects={'R_squared': R_squared})
     nnVS = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierVerticalShear.h5", custom_objects={'R_squared': R_squared})
 
-
-    image = cv2.imread("C:\\Users\\jxmr\\Downloads\\IMG_20191207_020224.jpg")
-
-    plt.subplot(1, 2, 1)
-    plt.imshow(image)
-
-    result = RectifyImage(image, model, nnX, nnZ, nnHS)
-
-    plt.subplot(1, 2, 2)
-    plt.imshow(result)
-    plt.show()
-
     image = cv2.imread("C:\\Users\\jxmr\\Downloads\\IMG_20191207_020339.jpg")
 
+    file1 = open( "C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\output1.txt", "w" ) 
+    print(pytesseract.image_to_string(image), file=file1)
+    file1.flush()
+    file1.close()
+
     plt.subplot(1, 2, 1)
     plt.imshow(image)
 
@@ -420,19 +385,10 @@ def RunMaskRCNN():
     plt.imshow(result)
     plt.show()
 
-
-    for r, d, f in os.walk("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\sampleDataset\\input_sample\\background00"):
-        for file in f:
-            if file.endswith("magazine001.avi"):
-                p = os.path.join(r, file)
-                print(p)
-                vidcap = cv2.VideoCapture(p)
-                success,image = vidcap.read()
-                while success:
-                    result = RectifyImage(image, model, nnX, nnZ, nnHS)
-                    plt.imshow(result)
-                    plt.show()
-                    success,image = vidcap.read()
+    file1 = open( "C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\output2.txt", "w" ) 
+    print(pytesseract.image_to_string(result), file=file1)
+    file1.flush()
+    file1.close()
 
 
 def RectifyImage(image, model, nnX, nnZ, nnHS):
@@ -442,23 +398,20 @@ def RectifyImage(image, model, nnX, nnZ, nnHS):
     roi = cv2.resize(roi, (754, 1000), interpolation=cv2.INTER_CUBIC)
 
     print("X")
-    _, image = Rotate([nnX], roi, [FuncX], image, 15, 0.90)
-    
-    roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-    roi = cv2.GaussianBlur(roi, (5,5),0)
-    ret, roi= cv2.threshold(roi,200,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-    roi = cv2.cvtColor(roi, cv2.COLOR_GRAY2BGR)
-    roi = cv2.resize(roi, (754, 1000), interpolation=cv2.INTER_CUBIC)
+    _, roi2 = Rotate([nnX], roi, [FuncX], image, 15)
 
     print("Z")
-    roi, image = Rotate([nnZ], roi, [FuncZ], image, 3, 1.90, invert=True)
+    _, roi2 = Rotate([nnZ], roi, [FuncZ], roi2, 5, invert=True)
 
-    roi = cv2.resize(image, (754, 1000), interpolation=cv2.INTER_CUBIC)
+    roi = cv2.resize(roi2, (754, 1000), interpolation=cv2.INTER_CUBIC)
 
-    print("ShearH")
-    roi, image = Rotate([nnHS], roi, [ShearH], image, 2, 0.080, invert=False)
+    print("HorizontalShear")
+    roi, roi2 = Rotate([nnHS], roi, [FuncY], roi2, 6)
 
-    return image
+    r = model.detect([roi2], verbose=1)[0]
+    roi2 = roi2[int(r['rois'][0][0]+230) : int(r['rois'][0][2]*.77), int(r['rois'][0][1]-200): int(r['rois'][0][3]*.90), :]
+
+    return roi2
 
 def FuncX(transformer, angle):
     return transformer.get_transformation_matrix(theta=angle)
@@ -477,7 +430,7 @@ def ShearV(transformer, shear):
             [shear, 1, 0],
             [0, 0, 1]]).astype(np.double)
 
-def Rotate(nns, roi, funcs, orig, iters, min, invert=False):
+def Rotate(nns, roi, funcs, orig, iters, invert=False):
 
     intermediate = roi
     composition = np.array([[1, 0, 0],
@@ -497,8 +450,6 @@ def Rotate(nns, roi, funcs, orig, iters, min, invert=False):
         if flag:
             previous = angle
             flag = False
-            if math.fabs(angle) < min:
-                return intermediate, orig
         if previous * angle < 0 or count > iters:
             if invert:
                 orig = cv2.warpPerspective(orig, composition, (orig.shape[1], orig.shape[0]), flags=cv2.INTER_LINEAR)
