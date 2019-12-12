@@ -79,16 +79,11 @@ def Validate():
             gamma = systemRandom.uniform(-30, 30)
             print(gamma)
 
-            transformer = ImageTransformer(fileName, shape=(754, 1000))
+            transformer = ImageTransformer('/content/gdrive/My Drive/W207-McConnell-Montanez/RVL-CDIP/images/imagesd/d/z/z/dzz99c00/50313205-3208.tif', shape=(754, 1000))
             img, transform = transformer.rotate_along_axis(gamma=gamma)
 
-            #transform = np.array([[1, 0, 0],
-            #    [shear, 1, 0],
-            #    [0, 0, 1]]).astype(np.double)
-            #img = cv2.warpPerspective(img, transform, (img.shape[1], img.shape[0]), flags=cv2.INTER_LINEAR)
-
+            plt.subplot(1,2,1)
             plt.imshow(img)
-            plt.show()
 
             gamma = nnZ.predict(img.flatten('K').reshape(1, -1))[0][0]
             print(gamma)
@@ -97,6 +92,7 @@ def Validate():
 
             img = cv2.warpPerspective(img, transform, (img.shape[1], img.shape[0]), flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP)
 
+            plt.subplot(1,2,2)
             plt.imshow(img)
             plt.show()
 
@@ -311,8 +307,8 @@ def TrainMaskRCNN():
 
     #model.load_weights(COCO_MODEL_PATH, by_name=True, exclude=["mrcnn_class_logits", "mrcnn_bbox_fc", "mrcnn_bbox", "mrcnn_mask"])
 
-    model.train(dataset_train, dataset_val, learning_rate=config.LEARNING_RATE, epochs=5, layers='all')
-    model_path = os.path.join(MODEL_DIR, "mask_rcnn_shapes2.h5")
+    model.train(dataset_train, dataset_val, learning_rate=config.LEARNING_RATE, epochs=8, layers='all')
+    model_path = os.path.join(MODEL_DIR, "mask_rcnn_segmentation.h5")
     model.keras_model.save_weights(model_path)
 
 def get_ax(rows=1, cols=1, size=8):
@@ -365,7 +361,7 @@ def RunMaskRCNN():
     plt.subplot(1, 2, 1)
     plt.imshow(image)
 
-    result = RectifyImage(image, model, nnX, nnZ, nnHS)
+    result = RectifyImage(image, model, nnX, nnZ, nnY, nnHS, nnVS)
 
     plt.subplot(1, 2, 2)
     plt.imshow(result)
@@ -377,27 +373,31 @@ def RunMaskRCNN():
     file1.close()
 
 
-def RectifyImage(image, model, nnX, nnZ, nnHS):
-    r = model.detect([image], verbose=1)[0]
+def RectifyImage(image, model, nnX, nnZ, nnY, nnHS, nnVS):
 
-    roi = image[int(r['rois'][0][0]*1.025) : int(r['rois'][0][2]*.975), int(r['rois'][0][1]*1.025): int(r['rois'][0][3]*.975), :]
-    roi = cv2.resize(roi, (754, 1000), interpolation=cv2.INTER_CUBIC)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray = cv2.GaussianBlur(gray,(49, 49),0)
+    _, gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    image[gray == 0] = 0
 
-    print("X")
-    _, roi2 = Rotate([nnX], roi, [FuncX], image, 15)
+    for i in range(3):
+
+        print("X")
+        image = Warp(model, nnX, FuncX, image, 25)  
+
+        print("Z")
+        image = Warp(model, nnZ, FuncZ, image, 25)
+
+        print("Y")
+        image = Warp(model, nnY, FuncY, image, 25)  
+
 
     print("Z")
-    _, roi2 = Rotate([nnZ], roi, [FuncZ], roi2, 5, invert=True)
+    image = Warp(model, nnZ, FuncZ, image, 25)
 
-    roi = cv2.resize(roi2, (754, 1000), interpolation=cv2.INTER_CUBIC)
-
-    print("HorizontalShear")
-    roi, roi2 = Rotate([nnHS], roi, [FuncY], roi2, 6)
-
-    r = model.detect([roi2], verbose=1)[0]
-    roi2 = roi2[int(r['rois'][0][0]+230) : int(r['rois'][0][2]*.77), int(r['rois'][0][1]-200): int(r['rois'][0][3]*.90), :]
-
-    return roi2
+    r = model.detect([image], verbose=1)[0]
+    return image[int(r['rois'][0][0]*1.15) : int(r['rois'][0][2]*.95), int(r['rois'][0][1]*1.15) : int(r['rois'][0][3]*.95), :]
+    
 
 def FuncX(transformer, angle):
     return transformer.get_transformation_matrix(theta=angle)
@@ -416,62 +416,61 @@ def ShearV(transformer, shear):
             [shear, 1, 0],
             [0, 0, 1]]).astype(np.double)
 
-def Rotate(nns, roi, funcs, orig, iters, invert=False):
+def Warp(model, nn, func, orig, iters, invert=True):
+
+    r = model.detect([orig], verbose=1)[0]
+
+    roi = orig[int(r['rois'][0][0]*1.10) : int(r['rois'][0][2]*0.90), int(r['rois'][0][1]*1.10): int(r['rois'][0][3]*0.90), :]
+    roi = cv2.resize(roi, (754, 1000), interpolation=cv2.INTER_CUBIC)
+    roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    roi = cv2.GaussianBlur(roi,(5, 5),0)
+    _, roi = cv2.threshold(roi, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    roi = cv2.cvtColor(roi, cv2.COLOR_GRAY2BGR)
 
     intermediate = roi
+    intermediate2 = orig
+
     composition = np.array([[1, 0, 0],
                     [0, 1, 0],
                     [0, 0, 1]]).astype(np.double)
 
-    index = 0
-    modulo = len(nns)
+    composition2 = np.array([[1, 0, 0],
+                [0, 1, 0],
+                [0, 0, 1]]).astype(np.double)
 
     flag = True
     previous = 0                         
     count = 1
     while True:
-
-        angle = nns[index % modulo].predict(intermediate.flatten('K').reshape(1, -1))[0]
+        angle = nn.predict(intermediate.flatten('K').reshape(1, -1))[0]
         print(angle)
         if flag:
             previous = angle
             flag = False
         if previous * angle < 0 or count > iters:
-            if invert:
-                orig = cv2.warpPerspective(orig, composition, (orig.shape[1], orig.shape[0]), flags=cv2.INTER_LINEAR)
-            else:
-                orig = cv2.warpPerspective(orig, composition, (orig.shape[1], orig.shape[0]), flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP)
             break
 
         count = count + 1
         previous = angle
         transformer = ImageTransformer("", image=intermediate, shape = None)
-        transform = funcs[index % modulo](transformer, angle[0])
-        index = index + 1
+        transform = func(transformer, angle[0])
+        transformer2 = ImageTransformer("", image=intermediate2, shape = None)
+        transform2 = func(transformer2, angle[0])
 
-        with warnings.catch_warnings():
-            warnings.filterwarnings('error')
-            try:
-                temp = composition
-                composition = np.matmul(composition, transform)
+        if invert:
+            composition = np.matmul(composition, np.linalg.inv(transform))
+            composition2 = np.matmul(composition2, np.linalg.inv(transform2))
 
-                if invert:
-                    intermediate = cv2.warpPerspective(roi, composition, (roi.shape[1], roi.shape[0]), flags=cv2.INTER_LINEAR)
-                else: 
-                    intermediate = cv2.warpPerspective(roi, composition, (roi.shape[1], roi.shape[0]), flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP)
-            except Warning as e:
-                composition = np.array([[1, 0, 0],
-                                        [0, 1, 0],
-                                        [0, 0, 1]]).astype(np.double)
-                if invert:
-                    orig = cv2.warpPerspective(orig, temp, (orig.shape[1], orig.shape[0]), flags=cv2.INTER_LINEAR)
-                    intermediate = roi = cv2.warpPerspective(roi, temp, (roi.shape[1], roi.shape[0]), flags=cv2.INTER_LINEAR)
-                else:
-                    orig = cv2.warpPerspective(orig, composition, (orig.shape[1], orig.shape[0]), flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP)
-                    intermediate = roi = cv2.warpPerspective(roi, temp, (roi.shape[1], roi.shape[0]), flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP)
-                
+            intermediate = cv2.warpPerspective(roi, composition, (roi.shape[1], roi.shape[0]), flags=cv2.INTER_LINEAR)                
+            intermediate2 = cv2.warpPerspective(orig, composition2, (orig.shape[1], orig.shape[0]), flags=cv2.INTER_LINEAR)  
+        else: 
+            composition = np.matmul(composition, transform)
+            composition2 = np.matmul(composition2, transform2)
 
-    return intermediate, orig
+            intermediate = cv2.warpPerspective(roi, composition, (roi.shape[1], roi.shape[0]), flags=cv2.INTER_LINEAR)
+            intermediate2 = cv2.warpPerspective(orig, composition2, (orig.shape[1], orig.shape[0]), flags=cv2.INTER_LINEAR)
+
+    return intermediate2
 
 def Test():
     for r, d, f in os.walk("C:\\Users\\jxmr\\Desktop\\ProjectIII\\OCRDataset\\Segmentation\\sampleDataset\\input_sample\\background00"):
