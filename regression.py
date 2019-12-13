@@ -32,15 +32,9 @@ def GenerateData():
     iter = 0
 
     for dir in os.listdir("C:\\Users\\jxmr\\Desktop\\ProjectIII\\rvl-cdip\\images"):
-        imagesX=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImagesX", "ab")
-        #imagesY=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImagesY", "ab")
-        #imagesShear=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImages_Vertically_Sheared", "ab")
-        #shears=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\vertical_shear", "ab")            
-        transformsX=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformsX", "ab")            
-        ##transformsZ=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformsZ_2", "ab")            
-        anglesX=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\anglesX", "ab")   
-        #anglesY=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\anglesY", "ab")  
-        #anglesZ=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\anglesZ_2", "ab")  
+        images=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImagesXYZ", "ab")
+        transforms=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformsXYZ", "ab")            
+        angles=open("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\anglesXYZ", "ab")   
 
         if iter == 4:
             break
@@ -53,15 +47,18 @@ def GenerateData():
                 fileName = os.path.join(r, file)
                 print(fileName)
 
-                angle = systemRandom.uniform(-30.0 , 30.0)
+                theta = systemRandom.uniform(-35.0 , 35.0)
+                phi = systemRandom.uniform(-35.0 , 35.0)
+                gamma = systemRandom.uniform(-35.0 , 35.0)
                 transformer = ImageTransformer(fileName, shape = (754,1000))
+                img, transform = transformer.rotate_along_axis(theta=theta, phi=phi, gamma=gamma)
+                np.asarray([theta, phi, gamma]).tofile(angles)
+                img.tofile(images)
+                transform.tofile(transforms)
 
-                img, transform = transformer.rotate_along_axis(theta=angle)
-                np.asarray(theta).tofile(anglesX)
-                img.tofile(imagesX)
-
-        imagesX.close() 
-        anglesX.close()
+        images.close() 
+        transforms.close()
+        angles.close()
         
 def Validate():
 
@@ -107,7 +104,7 @@ def Train():
                     kernel_initializer=keras.initializers.glorot_uniform(), 
                     bias_initializer=keras.initializers.glorot_uniform())(x)
 
-    x = Dense(units=1, use_bias=False)(x)
+    x = Dense(units=3, use_bias=False)(x)
 
     model = Model(inputs=[img_input], outputs=[x])
     model.summary()
@@ -118,15 +115,15 @@ def Train():
                 optimizer=keras.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=False),
                 metrics=[R_squared])
 
-    X_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImagesX", dtype=np.dtype("(2262000,)u1"))[:45000]
-    y_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\anglesX", dtype=np.dtype("(1,)f8"))[:45000]
+    X_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\transformedImagesXYZ", dtype=np.dtype("(2262000,)u1"))[:45000]
+    y_train = np.fromfile("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\anglesXYZ", dtype=np.dtype("(3,)f8"))[:45000]
 
     reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_R_squared', verbose=1, patience=5, mode='max')
     early_stopping = keras.callbacks.EarlyStopping(monitor='val_R_squared', min_delta=0.00005, patience=12, verbose=1, mode='max', baseline=None, restore_best_weights=True)
 
-    model.fit(X_train, y_train, epochs=30, batch_size=25, validation_split=0.1, verbose=1, shuffle=True, callbacks=[reduce_lr, early_stopping])
+    model.fit(X_train, y_train, epochs=30, batch_size=25, validation_split=0.05, verbose=1, shuffle=True, callbacks=[reduce_lr, early_stopping])
 
-    model.save("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierX.h5")
+    model.save("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierXYZ.h5")
 
 
 def R_squared(y, y_pred):
@@ -348,6 +345,7 @@ def RunMaskRCNN():
     nnX = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierX.h5", custom_objects={'R_squared': R_squared})
     nnY = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierY.h5", custom_objects={'R_squared': R_squared})
     nnZ = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierZ.h5", custom_objects={'R_squared': R_squared})
+    nnXYZ = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierXYZ.h5", custom_objects={'R_squared': R_squared})
     nnHS = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierHorizontalShear.h5", custom_objects={'R_squared': R_squared})
     nnVS = load_model("C:\\Users\\jxmr\\Desktop\\ProjectIII\\Data2\\kerasRectifierVerticalShear.h5", custom_objects={'R_squared': R_squared})
 
@@ -358,12 +356,13 @@ def RunMaskRCNN():
     file1.flush()
     file1.close()
 
-    plt.subplot(1, 2, 1)
+    #plt.subplot(1, 2, 1)
     plt.imshow(image)
+    plt.show()
 
-    result = RectifyImage(image, model, nnX, nnZ, nnY, nnHS, nnVS)
+    result = RectifyImage(image, model, nnX, nnZ, nnY, nnXYZ)
 
-    plt.subplot(1, 2, 2)
+    #plt.subplot(1, 2, 2)
     plt.imshow(result)
     plt.show()
 
@@ -373,31 +372,12 @@ def RunMaskRCNN():
     file1.close()
 
 
-def RectifyImage(image, model, nnX, nnZ, nnY, nnHS, nnVS):
+def RectifyImage(image, model, nnX, nnZ, nnY, nnXYZ):
 
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    gray = cv2.GaussianBlur(gray,(49, 49),0)
-    _, gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    image[gray == 0] = 0
-
-    for i in range(3):
-
-        print("X")
-        image = Warp(model, nnX, FuncX, image, 25)  
-
-        print("Z")
-        image = Warp(model, nnZ, FuncZ, image, 25)
-
-        print("Y")
-        image = Warp(model, nnY, FuncY, image, 25)  
-
-
-    print("Z")
-    image = Warp(model, nnZ, FuncZ, image, 25)
+    image = Warp(model, nnXYZ, FuncXYZ, image, 10)
 
     r = model.detect([image], verbose=1)[0]
-    return image[int(r['rois'][0][0]*1.15) : int(r['rois'][0][2]*.95), int(r['rois'][0][1]*1.15) : int(r['rois'][0][3]*.95), :]
-    
+    return image[int(r['rois'][0][0]) : int(r['rois'][0][2]), int(r['rois'][0][1]) : int(r['rois'][0][3]), :]
 
 def FuncX(transformer, angle):
     return transformer.get_transformation_matrix(theta=angle)
@@ -407,17 +387,39 @@ def FuncY(transformer, angle):
 
 def FuncZ(transformer, angle):
     return transformer.get_transformation_matrix(gamma=angle)
+
+def FuncXYZ(transformer, angles):
+    return transformer.get_transformation_matrix(theta=angles[0], phi=angles[1], gamma=angles[2])
+
 def ShearH(transformer, shear):
     return np.array([[1, shear, 0],
             [0, 1, 0],
             [0, 0, 1]]).astype(np.double)
+
 def ShearV(transformer, shear):
     return np.array([[1, 0, 0],
             [shear, 1, 0],
             [0, 0, 1]]).astype(np.double)
 
 def Warp(model, nn, func, orig, iters, invert=True):
+    
+    gray = cv2.cvtColor(orig, cv2.COLOR_BGR2GRAY)
+    gray = cv2.GaussianBlur(gray,(49, 49),0)
+    _, gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
+    median = np.median(orig[gray > 100])
+    dst = orig[orig > median *.95][:1200].reshape(20, 20, 3)
+    dst = cv2.copyMakeBorder(dst, orig.shape[0] - dst.shape[0], 0, orig.shape[1] - dst.shape[1], 0, cv2.BORDER_REFLECT)
+
+    tmp = orig
+    tmp[gray < 100] = 1
+    dst[gray >= 100] = 1
+    tmp = tmp * dst
+
+    plt.imshow(tmp)
+    plt.show()
+
+    orig[gray < 100] = 0
     r = model.detect([orig], verbose=1)[0]
 
     roi = orig[int(r['rois'][0][0]*1.10) : int(r['rois'][0][2]*0.90), int(r['rois'][0][1]*1.10): int(r['rois'][0][3]*0.90), :]
@@ -426,6 +428,8 @@ def Warp(model, nn, func, orig, iters, invert=True):
     roi = cv2.GaussianBlur(roi,(5, 5),0)
     _, roi = cv2.threshold(roi, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     roi = cv2.cvtColor(roi, cv2.COLOR_GRAY2BGR)
+
+    orig = tmp
 
     intermediate = roi
     intermediate2 = orig
@@ -437,38 +441,33 @@ def Warp(model, nn, func, orig, iters, invert=True):
     composition2 = np.array([[1, 0, 0],
                 [0, 1, 0],
                 [0, 0, 1]]).astype(np.double)
-
-    flag = True
-    previous = 0                         
+    
     count = 1
     while True:
         angle = nn.predict(intermediate.flatten('K').reshape(1, -1))[0]
         print(angle)
-        if flag:
-            previous = angle
-            flag = False
-        if previous * angle < 0 or count > iters:
+
+        if count > iters:
             break
 
         count = count + 1
-        previous = angle
         transformer = ImageTransformer("", image=intermediate, shape = None)
-        transform = func(transformer, angle[0])
+        transform = func(transformer, angle)
         transformer2 = ImageTransformer("", image=intermediate2, shape = None)
-        transform2 = func(transformer2, angle[0])
+        transform2 = func(transformer2, angle)
 
         if invert:
             composition = np.matmul(composition, np.linalg.inv(transform))
             composition2 = np.matmul(composition2, np.linalg.inv(transform2))
 
             intermediate = cv2.warpPerspective(roi, composition, (roi.shape[1], roi.shape[0]), flags=cv2.INTER_LINEAR)                
-            intermediate2 = cv2.warpPerspective(orig, composition2, (orig.shape[1], orig.shape[0]), flags=cv2.INTER_LINEAR)  
+            intermediate2 = cv2.warpPerspective(orig, composition2, (orig.shape[1], orig.shape[0]), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)  
         else: 
             composition = np.matmul(composition, transform)
             composition2 = np.matmul(composition2, transform2)
 
             intermediate = cv2.warpPerspective(roi, composition, (roi.shape[1], roi.shape[0]), flags=cv2.INTER_LINEAR)
-            intermediate2 = cv2.warpPerspective(orig, composition2, (orig.shape[1], orig.shape[0]), flags=cv2.INTER_LINEAR)
+            intermediate2 = cv2.warpPerspective(orig, composition2, (orig.shape[1], orig.shape[0]), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
 
     return intermediate2
 
@@ -494,65 +493,21 @@ def Test():
                     im = transformer.shear(y=-i/10)
                     plt.subplot(1,2,2)
                     plt.imshow(im)
-                    plt.show()  
-
-class CropLayer(object):
-    def __init__(self, params, blobs):
-        self.xstart = 0
-        self.xend = 0
-        self.ystart = 0
-        self.yend = 0
-
-    # Our layer receives two inputs. We need to crop the first input blob
-    # to match a shape of the second one (keeping batch size and number of channels)
-    def getMemoryShapes(self, inputs):
-        inputShape, targetShape = inputs[0], inputs[1]
-        batchSize, numChannels = inputShape[0], inputShape[1]
-        height, width = targetShape[2], targetShape[3]
-
-        self.ystart = (inputShape[2] - targetShape[2]) // 2
-        self.xstart = (inputShape[3] - targetShape[3]) // 2
-        self.yend = self.ystart + height
-        self.xend = self.xstart + width
-
-        return [[batchSize, numChannels, height, width]]
-
-    def forward(self, inputs):
-        return [inputs[0][:,:,self.ystart:self.yend,self.xstart:self.xend]]                
+                    plt.show()                 
                     
 if __name__ == '__main__':
     RunMaskRCNN()    
 
 
 
+        #bgdModel = np.zeros((1,65),np.float64)
+    #fgdModel = np.zeros((1,65),np.float64)
 
+    #mask = gray
+    #mask[gray == 0] = 0
+    #mask[gray == 255] = 1
 
+    #mask, bgdModel, fgdModel = cv2.grabCut(orig, mask, None, bgdModel, fgdModel, 5, cv2.GC_INIT_WITH_MASK)
 
-
-
-
-
-
-
-
-
-
-
-
-
-#cv2.dnn_registerLayer('Crop', CropLayer)
-#net = cv2.dnn.readNet('deploy.prototxt', 'hed_pretrained_bsds.caffemodel')
-
-
-#inp = cv2.dnn.blobFromImage(image, scalefactor=1.0, size=(image.shape[1], image.shape[0]),
-#                           mean=(104.00698793, 116.66876762, 122.67891434),
-#                           swapRB=False, crop=False)
-#net.setInput(inp)
-#out = net.forward()
-#out = out[0, 0]
-#out = cv2.resize(out, (roi.shape[1], roi.shape[0]))
-#out = 255 * out
-#out = out.astype(np.uint8)
-#out=cv2.cvtColor(out,cv2.COLOR_GRAY2BGR)
-#plt.imshow(out)
-#plt.show()
+    #mask = np.where((mask==2)|(mask==0),0,1).astype('uint8')
+    #orig = orig*mask[:,:,np.newaxis]
